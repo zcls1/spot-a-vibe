@@ -7,7 +7,7 @@ Person detection runs entirely in the browser with [OpenCV.js](https://docs.open
 
 ## Run
 
-The Flask server serves the page and runs genre detection with [Clef-Flash](https://huggingface.co/Cloudflare/clef-flash), loaded directly with PyTorch. The model is ~19 GB (9.4B parameters, bf16), so you need a machine with an NVIDIA GPU or an Apple Silicon Mac with enough memory (tested on an M3 Max with 36 GB).
+The Flask server serves the page and runs genre detection with [Clef-Flash](https://huggingface.co/Cloudflare/clef-flash), loaded directly with PyTorch. 
 
 ```sh
 python3 -m venv .venv
