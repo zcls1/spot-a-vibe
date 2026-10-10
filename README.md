@@ -1,7 +1,7 @@
 # spot-a-vibe
 Knight Hacks IX
 
-Detects whether someone is in front of your laptop camera, entirely in the browser, using [OpenCV.js](https://docs.opencv.org/4.9.0/opencv.js) Haar cascades.
+Detects whether a person is in front of your laptop camera, entirely in the browser, using [OpenCV.js](https://docs.opencv.org/4.9.0/opencv.js) and a MobileNet-SSD object detector.
 
 ## Run
 
@@ -14,7 +14,8 @@ python3 -m http.server 8000
 
 ## How it works
 
-- Frames are downscaled to 320px wide, converted to grayscale and histogram-equalised.
-- `models/haarcascade_frontalface_default.xml` finds faces looking at the screen; if none are found, `haarcascade_profileface.xml` runs on the frame and its mirror to catch people turned sideways.
-- Presence is debounced: 3 consecutive detections → **present**; no face for the "Away after" grace period → **away**.
+- `detector.worker.js` loads OpenCV.js and `models/MobileNetSSD_deploy.*` (a Caffe SSD trained on PASCAL VOC) in a Web Worker, so the ~0.5–1 s inference doesn't freeze the page.
+- Each frame is resized to 300×300 and run through the network; only "person" detections above the confidence threshold (the Sensitivity slider) and covering at least 4% of the frame are kept. That excludes people far away in the background.
+- Because it detects whole people, not faces, it still works if you're facing away, looking down, or only partly in frame.
+- Presence is debounced: 3 consecutive detections → **present**; nobody detected for the "Away after" grace period → **away**.
 - Arrivals/departures are logged, reflected in the tab title, and optionally sent as desktop notifications.
