@@ -304,7 +304,7 @@ function addSnapshot(blob, takenAt) {
       if (requestId === latestGenreRequest) {
         lastVibe = { answer, takenAt };
         showVibeResult(answer, takenAt);
-        findSongs(answer.choice, requestId);
+        findSongs(answer, requestId);
       }
       genre.textContent = `${answer.choice} · ${Math.round(answer.confidence * 100)}%`;
       genre.title = Object.entries(answer.probabilities)
@@ -396,7 +396,7 @@ async function initSpotify() {
   if (restored && !lastVibe) {
     lastVibe = { answer: restored.answer, takenAt: new Date(restored.takenAt) };
     showVibeResult(lastVibe.answer, lastVibe.takenAt);
-    findSongs(lastVibe.answer.choice, latestGenreRequest);
+    findSongs(lastVibe.answer, latestGenreRequest);
   }
 }
 
@@ -480,15 +480,20 @@ function songCard(song) {
   return li;
 }
 
-// Only called for the newest snapshot; a newer one arriving mid-request wins.
-async function findSongs(genre, requestId) {
+// Only called for the newest snapshot; a newer one arriving mid-request wins. The
+// server picks artists by how well they match all of Clef's genre probabilities.
+async function findSongs(answer, requestId) {
   if (!spotifyConnected) return;
+  const genre = answer.choice;
   pendingPlaylist = null;
   els.songList.hidden = true;
   els.spotifySave.hidden = true;
   showSongsMessage('loading', `Finding ${genre} songs…`);
   try {
-    const { res, data } = await postSpotify('/api/playlist/songs', { genre });
+    const { res, data } = await postSpotify('/api/playlist/songs', {
+      genre,
+      probabilities: answer.probabilities,
+    });
     if (requestId !== latestGenreRequest) return;
     if (res.status === 401) setSpotifyConnected(false);
     if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
@@ -559,7 +564,7 @@ window.addEventListener('message', async (event) => {
     addLogEntry('Spotify connected', 'snap');
     // Skip while a newer snapshot is being read; its result fetches songs itself.
     if (lastVibe && els.vibe.dataset.state === 'result') {
-      findSongs(lastVibe.answer.choice, latestGenreRequest);
+      findSongs(lastVibe.answer, latestGenreRequest);
     }
   } catch (err) {
     console.error('spotify:', err);

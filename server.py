@@ -275,7 +275,17 @@ def spotify_genre_request(handler):
 @app.post("/api/playlist/songs")
 def playlist_songs():
     def find(token, genre, data):
-        songs = search_songs(token, genre)
+        # Clef's probability for each genre steers which artists are picked. Without
+        # them (or if they're malformed), fall back to the top genre alone.
+        probabilities = data.get("probabilities")
+        if not (
+            isinstance(probabilities, dict)
+            and set(probabilities) <= set(GENRES)
+            and all(isinstance(p, (int, float)) and 0 <= p <= 1 for p in probabilities.values())
+            and any(probabilities.values())
+        ):
+            probabilities = {genre: 1.0}
+        songs = search_songs(token, genre, probabilities)
         if not songs:
             return jsonify(error=f"Spotify found no {genre} songs"), 404
         return jsonify(genre=genre, songs=songs)
