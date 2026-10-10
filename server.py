@@ -1,8 +1,8 @@
 """Flask server for spot-a-vibe.
 
-Serves the static app, exposes POST /api/genre for genre detection and
-POST /api/songs for Spotify songs that match a genre, and handles signing in with
-Spotify. Genre detection runs in one of three places:
+Serves the static app, exposes POST /api/genre for genre detection, and lets
+users sign in with Spotify so POST /api/playlist can create a playlist for their
+genre on their account. Genre detection runs in one of three places:
 
   - a Hugging Face Inference Endpoint (CLEF_ENDPOINT_URL set): the snapshot is
     forwarded there, so this server needs no GPU or model dependencies
@@ -15,10 +15,10 @@ Environment variables:
   HF_TOKEN               Hugging Face token allowed to call that endpoint
   CLEF_STUB              set to 1 to skip the model and return random probabilities
   SECRET_KEY             signs the session cookie that holds Spotify tokens
-  SPOTIFY_CLIENT_ID      from the Spotify developer dashboard; with the secret,
-  SPOTIFY_CLIENT_SECRET  enough for song search (POST /api/songs)
+  SPOTIFY_CLIENT_ID      from the Spotify developer dashboard
+  SPOTIFY_CLIENT_SECRET
   SPOTIFY_REDIRECT_URI   must match a redirect URI registered in the dashboard,
-                         e.g. https://<host>/spotify/callback; needed for sign-in
+                         e.g. https://<host>/spotify/callback
 Variables can also be set in a .env file, which spotify_service loads on import.
 Local model runs also read CLEF_MODEL, CLEF_REVISION and CLEF_DEVICE (see
 endpoint/handler.py).
@@ -38,7 +38,7 @@ from PIL import Image, UnidentifiedImageError
 
 from endpoint.handler import GENRES
 # Imported before reading the environment below, since it loads .env.
-from spotify_service import TOKEN_URL, search_songs
+from spotify_service import TOKEN_URL, create_playlist, search_songs
 
 ENDPOINT_URL = os.environ.get("CLEF_ENDPOINT_URL")
 HF_TOKEN = os.environ.get("HF_TOKEN")
@@ -216,21 +216,32 @@ def spotify_logout():
     return jsonify(connected=False)
 
 
-@app.post("/api/songs")
-def songs():
-    # Searching uses the app's own credentials (spotify_service), so it works
-    # without the user signing in.
+@app.post("/api/playlist")
+def playlist():
     genre = (request.get_json(silent=True) or {}).get("genre")
     if genre not in GENRES:
         return jsonify(error=f"genre must be one of {', '.join(GENRES)}"), 400
+    token = spotify_access_token()
+    if token is None:
+        return jsonify(error="connect Spotify first"), 401
     try:
-        return jsonify(genre=genre, songs=search_songs([genre]))
-    except RuntimeError:
-        # spotify_service raises this when the credentials are missing.
-        return jsonify(error="Spotify is not configured on this server"), 503
+        songs = search_songs(token, genre)
+        if not songs:
+            return jsonify(error=f"Spotify found no {genre} songs"), 404
+        return jsonify(genre=genre, playlist=create_playlist(token, genre, songs), songs=songs)
+    except requests.HTTPError as err:
+        app.logger.exception("Spotify playlist failed")
+        if err.response.status_code == 401:
+            # The user revoked access or the token is no longer valid; sign them out.
+            session.pop("spotify", None)
+            return jsonify(error="Spotify sign-in expired, connect again"), 401
+        if err.response.status_code == 403:
+            # Development-mode apps only work for accounts on the app's allowlist.
+            return jsonify(error="this Spotify account isn't allowed to use the app yet"), 403
+        return jsonify(error="Spotify couldn't make the playlist"), 502
     except requests.RequestException:
-        app.logger.exception("Spotify search failed")
-        return jsonify(error="Spotify search failed"), 502
+        app.logger.exception("could not reach Spotify")
+        return jsonify(error="could not reach Spotify"), 502
 
 
 @app.get("/api/spotify/status")

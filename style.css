@@ -227,7 +227,8 @@ input[type="range"] { width: 100%; }
 .vibe-message { margin: 0; color: var(--muted); }
 .vibe[data-state="countdown"] .vibe-message { color: var(--text); }
 .vibe[data-state="error"] .vibe-message { color: var(--away); }
-.vibe[data-state="loading"] .vibe-message::before {
+.vibe[data-state="loading"] .vibe-message::before,
+.spotify[data-state="loading"] .spotify-message::before {
   content: "";
   display: inline-block;
   width: 10px;
@@ -281,6 +282,43 @@ input[type="range"] { width: 100%; }
 }
 .vibe-bars li.top .fill { background: var(--accent); }
 .vibe-bars .value { text-align: right; font-variant-numeric: tabular-nums; }
+
+.spotify {
+  display: grid;
+  gap: 10px;
+  margin-top: 14px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border);
+}
+.spotify[hidden], .spotify [hidden] { display: none; }
+.spotify-message { margin: 0; color: var(--muted); }
+.spotify[data-state="done"] .spotify-message { color: var(--text); }
+.spotify[data-state="error"] .spotify-message { color: var(--away); }
+.spotify-message a { color: var(--accent); }
+.spotify-connect {
+  display: inline-block;
+  padding: 8px 16px;
+  border-radius: 999px;
+  background: #1db954;
+  color: #0b1d10;
+  font-weight: 600;
+  text-decoration: none;
+}
+.link-button {
+  padding: 0;
+  background: none;
+  color: var(--muted);
+  font-size: 0.85rem;
+  text-decoration: underline;
+}
+.spotify-songs {
+  margin: 0;
+  padding-left: 1.4em;
+  display: grid;
+  gap: 4px;
+  font-size: 0.9rem;
+}
+.spotify-songs .artist { color: var(--muted); }
 
 .snapshots { margin-top: 24px; }
 .snapshots h2 { font-size: 1rem; margin: 0 0 10px; }

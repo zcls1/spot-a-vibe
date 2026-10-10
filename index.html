@@ -40,6 +40,14 @@
           </div>
           <ol id="vibeBars" class="vibe-bars" aria-label="Probability for each genre"></ol>
         </div>
+        <div id="spotify" class="spotify" data-state="idle" hidden>
+          <p id="spotifyMessage" class="spotify-message"></p>
+          <div class="spotify-actions">
+            <a id="spotifyConnect" class="spotify-connect" href="/spotify/login" hidden>Connect Spotify</a>
+            <button id="spotifyDisconnect" class="link-button" type="button" hidden>Disconnect Spotify</button>
+          </div>
+          <ol id="spotifySongs" class="spotify-songs" aria-label="Songs in the playlist" hidden></ol>
+        </div>
       </section>
       </div>
 

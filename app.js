@@ -45,6 +45,11 @@ const els = {
   vibeGenre: $('vibeGenre'),
   vibeConfidence: $('vibeConfidence'),
   vibeBars: $('vibeBars'),
+  spotify: $('spotify'),
+  spotifyMessage: $('spotifyMessage'),
+  spotifyConnect: $('spotifyConnect'),
+  spotifyDisconnect: $('spotifyDisconnect'),
+  spotifySongs: $('spotifySongs'),
 };
 
 let procCanvas, procCtx, overlayCtx;
@@ -53,6 +58,7 @@ let frameStartedAt = 0;
 let countdownTimer = null;
 let latestGenreRequest = 0;  // ignore responses for snapshots older than the newest one
 let lastVibe = null;         // { answer, takenAt } of the most recent result
+let spotifyConnected = false;
 
 const presence = {
   state: 'unknown',       // 'unknown' | 'present' | 'away'
@@ -290,6 +296,7 @@ function addSnapshot(blob, takenAt) {
       if (requestId === latestGenreRequest) {
         lastVibe = { answer, takenAt };
         showVibeResult(answer, takenAt);
+        makePlaylist(answer.choice, requestId);
       }
       genre.textContent = `${answer.choice} · ${Math.round(answer.confidence * 100)}%`;
       genre.title = Object.entries(answer.probabilities)
@@ -346,6 +353,83 @@ function showVibeResult(answer, takenAt) {
     return li;
   }));
 }
+
+// Spotify section of the vibe card: hidden unless the server has Spotify set up. Once
+// the user connects, each new vibe gets a playlist of its top genre on their account.
+async function initSpotify() {
+  try {
+    const res = await fetch('/api/spotify/status');
+    const status = await res.json();
+    if (status.configured) setSpotifyConnected(status.connected);
+  } catch (err) {
+    console.error('spotify:', err);
+  }
+}
+
+function setSpotifyConnected(connected) {
+  spotifyConnected = connected;
+  els.spotify.hidden = false;
+  els.spotifyConnect.hidden = connected;
+  els.spotifyDisconnect.hidden = !connected;
+  els.spotifySongs.hidden = true;
+  showSpotifyMessage('idle', connected
+    ? 'Spotify connected. Each vibe gets its own playlist.'
+    : 'Connect Spotify to get a playlist for each vibe.');
+}
+
+function showSpotifyMessage(state, text, link) {
+  els.spotify.dataset.state = state;
+  els.spotifyMessage.replaceChildren(text);
+  if (link) {
+    const a = document.createElement('a');
+    a.href = link;
+    a.target = '_blank';
+    a.rel = 'noopener';
+    a.textContent = 'Open in Spotify';
+    els.spotifyMessage.append(' ', a);
+  }
+}
+
+// Only called for the newest snapshot; a newer one arriving mid-request wins.
+async function makePlaylist(genre, requestId) {
+  if (!spotifyConnected) return;
+  els.spotifySongs.hidden = true;
+  showSpotifyMessage('loading', `Making a ${genre} playlist…`);
+  try {
+    const res = await fetch('/api/playlist', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ genre }),
+    });
+    const body = await res.json().catch(() => ({}));
+    if (requestId !== latestGenreRequest) return;
+    if (res.status === 401) setSpotifyConnected(false);
+    if (!res.ok) throw new Error(body.error || `HTTP ${res.status}`);
+
+    showSpotifyMessage('done', `${body.playlist.name} is ready.`, body.playlist.spotify_url);
+    els.spotifySongs.replaceChildren(...body.songs.map((song) => {
+      const li = document.createElement('li');
+      const artist = document.createElement('span');
+      artist.className = 'artist';
+      artist.textContent = song.artist;
+      li.append(song.title, ' ', artist);
+      return li;
+    }));
+    els.spotifySongs.hidden = false;
+    addLogEntry(`Playlist: ${genre}`, 'snap');
+  } catch (err) {
+    console.error('playlist:', err);
+    if (requestId === latestGenreRequest) {
+      showSpotifyMessage('error', `Couldn’t make a playlist: ${err.message}`);
+    }
+  }
+}
+
+els.spotifyDisconnect.addEventListener('click', async () => {
+  await fetch('/spotify/logout', { method: 'POST' }).catch(() => {});
+  setSpotifyConnected(false);
+});
+initSpotify();
 
 // Sends a snapshot to the Flask server, which runs it through Clef-Flash.
 async function classifyGenre(blob, stamp) {
