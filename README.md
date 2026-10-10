@@ -12,7 +12,7 @@ pip install -r requirements.txt
 python server.py            # downloads the model on first run, then serves http://127.0.0.1:8000
 ```
 
-To work on the front end without a GPU, `CLEF_STUB=1 python server.py` skips the model and returns equal probabilities for every genre.
+To work on the front end without a GPU, `CLEF_STUB=1 python server.py` skips the model and returns random genre probabilities.
 
 Camera access requires a secure context, so open the page via `localhost` or HTTPS, not `file://`.
 

@@ -6,11 +6,12 @@ Cloudflare's Clef-Flash decision model and returns a Jev/SystemOne response body
 Environment variables:
   CLEF_MODEL   Hugging Face repo or local path (default: Cloudflare/clef-flash)
   CLEF_DEVICE  cuda, mps or cpu (default: the first one available)
-  CLEF_STUB    set to 1 to skip loading the model and return uniform probabilities,
+  CLEF_STUB    set to 1 to skip loading the model and return random probabilities,
                for working on the front end without a GPU
 """
 
 import os
+import random
 import sys
 import threading
 
@@ -77,14 +78,17 @@ def classify(image):
         "questions": {"genre": GENRE_QUESTION},
     }
     if STUB:
-        share = round(1 / len(GENRES), 4)
+        weights = {genre: random.random() ** 3 for genre in GENRES}
+        total = sum(weights.values())
+        probabilities = {genre: round(w / total, 4) for genre, w in weights.items()}
+        choice = max(probabilities, key=probabilities.get)
         return {
             "model": "stub",
             "answers": {"genre": {
                 "type": "choice",
-                "choice": GENRES[0],
-                "confidence": share,
-                "probabilities": {genre: share for genre in GENRES},
+                "choice": choice,
+                "confidence": probabilities[choice],
+                "probabilities": probabilities,
             }},
             "usage": {"input_tokens": 0, "output_tokens": 0},
         }

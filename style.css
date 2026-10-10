@@ -7,6 +7,8 @@
   --present: #2ecc71;
   --away: #e74c3c;
   --unknown: #7f8696;
+  --accent: #6f8cff;
+  --accent-muted: #3a4775;
   color-scheme: dark;
 }
 
@@ -37,6 +39,13 @@ h1 { margin: 0; font-size: 1.8rem; letter-spacing: -0.02em; }
 
 @media (max-width: 820px) {
   .stage { grid-template-columns: 1fr; }
+}
+
+.feed {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  min-width: 0;
 }
 
 .video-wrap {
@@ -199,6 +208,79 @@ input[type="range"] { width: 100%; }
 .log li.in { color: var(--present); }
 .log li.out { color: var(--away); }
 .log li.snap { color: #8fa8ff; }
+
+.vibe {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 14px 16px 16px;
+}
+.vibe-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+.vibe-head h2 { font-size: 0.85rem; color: var(--muted); font-weight: 500; margin: 0; }
+.vibe-time { font-size: 0.8rem; color: var(--muted); }
+.vibe-message { margin: 0; color: var(--muted); }
+.vibe[data-state="countdown"] .vibe-message { color: var(--text); }
+.vibe[data-state="error"] .vibe-message { color: var(--away); }
+.vibe[data-state="loading"] .vibe-message::before {
+  content: "";
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  margin-right: 8px;
+  border: 2px solid var(--accent);
+  border-right-color: transparent;
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+
+.vibe-top {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-bottom: 12px;
+}
+.vibe-genre { font-size: 2rem; font-weight: 700; letter-spacing: -0.02em; line-height: 1.1; }
+.vibe-confidence { color: var(--muted); }
+
+.vibe-bars {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 6px;
+}
+.vibe-bars li {
+  display: grid;
+  grid-template-columns: 6.5em minmax(0, 1fr) 3em;
+  align-items: center;
+  gap: 10px;
+  font-size: 0.85rem;
+  color: var(--muted);
+}
+.vibe-bars li.top { color: var(--text); font-weight: 600; }
+.vibe-bars .track {
+  height: 8px;
+  border-radius: 4px;
+  background: var(--bg);
+  overflow: hidden;
+}
+.vibe-bars .fill {
+  display: block;
+  height: 100%;
+  border-radius: 4px;
+  background: var(--accent-muted);
+  transition: width 0.4s ease-out;
+}
+.vibe-bars li.top .fill { background: var(--accent); }
+.vibe-bars .value { text-align: right; font-variant-numeric: tabular-nums; }
 
 .snapshots { margin-top: 24px; }
 .snapshots h2 { font-size: 1rem; margin: 0 0 10px; }

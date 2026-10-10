@@ -38,12 +38,21 @@ const els = {
   flash: $('flash'),
   snapshots: $('snapshots'),
   noSnapshots: $('noSnapshots'),
+  vibe: $('vibe'),
+  vibeTime: $('vibeTime'),
+  vibeMessage: $('vibeMessage'),
+  vibeResult: $('vibeResult'),
+  vibeGenre: $('vibeGenre'),
+  vibeConfidence: $('vibeConfidence'),
+  vibeBars: $('vibeBars'),
 };
 
 let procCanvas, procCtx, overlayCtx;
 let running = false;
 let frameStartedAt = 0;
 let countdownTimer = null;
+let latestGenreRequest = 0;  // ignore responses for snapshots older than the newest one
+let lastVibe = null;         // { answer, takenAt } of the most recent result
 
 const presence = {
   state: 'unknown',       // 'unknown' | 'present' | 'away'
@@ -168,8 +177,16 @@ function setPresence(state, since) {
   document.title = `${state === 'present' ? '🟢' : '🔴'} spot-a-vibe`;
 
   addLogEntry(state === 'present' ? 'Arrived' : 'Left', state === 'present' ? 'in' : 'out');
-  if (state === 'present') startCountdown();
-  else cancelCountdown();
+  if (state === 'present') {
+    startCountdown();
+  } else {
+    cancelCountdown();
+    // Leaving mid-countdown: go back to whatever the card showed before.
+    if (els.vibe.dataset.state === 'countdown') {
+      if (lastVibe) showVibeResult(lastVibe.answer, lastVibe.takenAt);
+      else showVibeStatus('idle', 'Waiting for someone to step in front of the camera.');
+    }
+  }
 
   if (prev !== 'unknown' && els.notify.checked && Notification.permission === 'granted') {
     new Notification('spot-a-vibe', {
@@ -195,6 +212,7 @@ function startCountdown() {
   cancelCountdown();
   let remaining = COUNTDOWN_SECONDS;
   showCountdown(remaining);
+  showVibeStatus('countdown', 'Someone’s here. Hold still for a snapshot…');
   countdownTimer = setInterval(() => {
     remaining--;
     if (remaining > 0) {
@@ -264,8 +282,15 @@ function addSnapshot(blob, takenAt) {
   els.noSnapshots.hidden = true;
   els.snapshots.prepend(fig);
 
+  const requestId = ++latestGenreRequest;
+  showVibeStatus('loading', 'Reading the vibe…');
+
   classifyGenre(blob, stamp).then(
     (answer) => {
+      if (requestId === latestGenreRequest) {
+        lastVibe = { answer, takenAt };
+        showVibeResult(answer, takenAt);
+      }
       genre.textContent = `${answer.choice} · ${Math.round(answer.confidence * 100)}%`;
       genre.title = Object.entries(answer.probabilities)
         .sort((a, b) => b[1] - a[1])
@@ -277,8 +302,49 @@ function addSnapshot(blob, takenAt) {
       console.error('genre:', err);
       genre.textContent = 'Genre unavailable';
       genre.classList.add('failed');
+      if (requestId === latestGenreRequest) {
+        showVibeStatus('error', `Couldn’t read the vibe: ${err.message}`);
+      }
     },
   );
+}
+
+// Vibe card: idle / countdown / loading / error show a message; result shows the genre breakdown.
+function showVibeStatus(state, message) {
+  els.vibe.dataset.state = state;
+  els.vibeMessage.textContent = message;
+  els.vibeMessage.hidden = false;
+  els.vibeResult.hidden = true;
+  els.vibeTime.textContent = '';
+}
+
+function showVibeResult(answer, takenAt) {
+  els.vibe.dataset.state = 'result';
+  els.vibeMessage.hidden = true;
+  els.vibeResult.hidden = false;
+  els.vibeGenre.textContent = answer.choice;
+  els.vibeConfidence.textContent = `${Math.round(answer.confidence * 100)}% confident`;
+  els.vibeTime.textContent = `from ${takenAt.toLocaleTimeString()}`;
+
+  const ranked = Object.entries(answer.probabilities).sort((a, b) => b[1] - a[1]);
+  els.vibeBars.replaceChildren(...ranked.map(([name, p]) => {
+    const li = document.createElement('li');
+    if (name === answer.choice) li.className = 'top';
+    const label = document.createElement('span');
+    label.className = 'name';
+    label.textContent = name;
+    const track = document.createElement('span');
+    track.className = 'track';
+    const fill = document.createElement('span');
+    fill.className = 'fill';
+    fill.style.width = `${p * 100}%`;
+    track.append(fill);
+    const value = document.createElement('span');
+    value.className = 'value';
+    value.textContent = `${Math.round(p * 100)}%`;
+    li.append(label, track, value);
+    return li;
+  }));
 }
 
 // Sends a snapshot to the Flask server, which runs it through Clef-Flash.
