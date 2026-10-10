@@ -1,3 +1,6 @@
+# Import random to pick a different set of songs each time
+import random
+
 # Import requests to communicate with Spotify
 import requests
 
@@ -19,6 +22,10 @@ CREATE_PLAYLIST_URL = "https://api.spotify.com/v1/me/playlists"
 # Spotify's URL for adding songs to a playlist
 PLAYLIST_ITEMS_URL = "https://api.spotify.com/v1/playlists/{playlist_id}/items"
 
+# How far into the search results the random starting point can be. Deeper results are
+# less popular, so this keeps the songs recognisable while still varying them.
+MAX_RANDOM_OFFSET = 100
+
 
 def search_songs(token, genre, limit=10):
     # Search by genre rather than plain text, so "Jazz" finds jazz songs instead of
@@ -26,29 +33,12 @@ def search_songs(token, genre, limit=10):
     # Example: "R&B" becomes genre:"r&b"
     query = f'genre:"{genre.lower()}"'
 
-    # Send a song-search request to Spotify
-    response = requests.get(
-        SEARCH_URL,
+    # Start at a random point in the results so the same genre gives different songs
+    tracks = _search_tracks(token, query, limit, random.randint(0, MAX_RANDOM_OFFSET))
 
-        # Include the signed-in user's access token to authorize the request
-        headers={"Authorization": f"Bearer {token}"},
-
-        # Tell Spotify what to search for and how many results to return (at most 10)
-        params={
-            "q": query,
-            "type": "track",
-            "limit": limit,
-        },
-
-        # Stop waiting if Spotify takes too long
-        timeout=15,
-    )
-
-    # Raise an error if the search request fails
-    response.raise_for_status()
-
-    # Extract the list of matching tracks from the response
-    tracks = response.json()["tracks"]["items"]
+    # A genre with fewer results than the starting point returns nothing; start from the top
+    if not tracks:
+        tracks = _search_tracks(token, query, limit, 0)
 
     # Build a simpler list containing only the information we need
     return [
@@ -83,7 +73,34 @@ def search_songs(token, genre, limit=10):
     ]
 
 
-def create_playlist(token, genre, songs):
+def _search_tracks(token, query, limit, offset):
+    # Send a song-search request to Spotify
+    response = requests.get(
+        SEARCH_URL,
+
+        # Include the signed-in user's access token to authorize the request
+        headers={"Authorization": f"Bearer {token}"},
+
+        # Tell Spotify what to search for and how many results to return (at most 10)
+        params={
+            "q": query,
+            "type": "track",
+            "limit": limit,
+            "offset": offset,
+        },
+
+        # Stop waiting if Spotify takes too long
+        timeout=15,
+    )
+
+    # Raise an error if the search request fails
+    response.raise_for_status()
+
+    # Return the list of matching tracks from the response
+    return response.json()["tracks"]["items"]
+
+
+def create_playlist(token, genre, uris):
     # Include the signed-in user's access token in every request
     headers = {"Authorization": f"Bearer {token}"}
 
@@ -109,7 +126,7 @@ def create_playlist(token, genre, songs):
     response = requests.post(
         PLAYLIST_ITEMS_URL.format(playlist_id=playlist["id"]),
         headers=headers,
-        json={"uris": [song["uri"] for song in songs]},
+        json={"uris": uris},
         timeout=15,
     )
 

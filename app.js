@@ -50,6 +50,7 @@ const els = {
   spotifyConnect: $('spotifyConnect'),
   spotifyDisconnect: $('spotifyDisconnect'),
   spotifySongs: $('spotifySongs'),
+  spotifySave: $('spotifySave'),
 };
 
 let procCanvas, procCtx, overlayCtx;
@@ -59,6 +60,7 @@ let countdownTimer = null;
 let latestGenreRequest = 0;  // ignore responses for snapshots older than the newest one
 let lastVibe = null;         // { answer, takenAt } of the most recent result
 let spotifyConnected = false;
+let pendingPlaylist = null;  // { genre, songs, requestId } shown in the card, ready to save
 
 const presence = {
   state: 'unknown',       // 'unknown' | 'present' | 'away'
@@ -296,7 +298,7 @@ function addSnapshot(blob, takenAt) {
       if (requestId === latestGenreRequest) {
         lastVibe = { answer, takenAt };
         showVibeResult(answer, takenAt);
-        makePlaylist(answer.choice, requestId);
+        findSongs(answer.choice, requestId);
       }
       genre.textContent = `${answer.choice} · ${Math.round(answer.confidence * 100)}%`;
       genre.title = Object.entries(answer.probabilities)
@@ -355,7 +357,9 @@ function showVibeResult(answer, takenAt) {
 }
 
 // Spotify section of the vibe card: hidden unless the server has Spotify set up. Once
-// the user connects, each new vibe gets a playlist of its top genre on their account.
+// the user connects, each new vibe shows songs from its top genre, which they can
+// save as a playlist on their account. Connecting leaves the page, so do it before
+// starting the camera.
 async function initSpotify() {
   try {
     const res = await fetch('/api/spotify/status');
@@ -368,13 +372,15 @@ async function initSpotify() {
 
 function setSpotifyConnected(connected) {
   spotifyConnected = connected;
+  pendingPlaylist = null;
   els.spotify.hidden = false;
   els.spotifyConnect.hidden = connected;
   els.spotifyDisconnect.hidden = !connected;
   els.spotifySongs.hidden = true;
+  els.spotifySave.hidden = true;
   showSpotifyMessage('idle', connected
-    ? 'Spotify connected. Each vibe gets its own playlist.'
-    : 'Connect Spotify to get a playlist for each vibe.');
+    ? 'Spotify connected. Each vibe gets songs you can save as a playlist.'
+    : 'Connect Spotify before starting the camera to get a playlist for each vibe.');
 }
 
 function showSpotifyMessage(state, text, link) {
@@ -390,24 +396,32 @@ function showSpotifyMessage(state, text, link) {
   }
 }
 
+async function postSpotify(url, body) {
+  const res = await fetch(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  });
+  const data = await res.json().catch(() => ({}));
+  return { res, data };
+}
+
 // Only called for the newest snapshot; a newer one arriving mid-request wins.
-async function makePlaylist(genre, requestId) {
+async function findSongs(genre, requestId) {
   if (!spotifyConnected) return;
+  pendingPlaylist = null;
   els.spotifySongs.hidden = true;
-  showSpotifyMessage('loading', `Making a ${genre} playlist…`);
+  els.spotifySave.hidden = true;
+  showSpotifyMessage('loading', `Finding ${genre} songs…`);
   try {
-    const res = await fetch('/api/playlist', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ genre }),
-    });
-    const body = await res.json().catch(() => ({}));
+    const { res, data } = await postSpotify('/api/playlist/songs', { genre });
     if (requestId !== latestGenreRequest) return;
     if (res.status === 401) setSpotifyConnected(false);
-    if (!res.ok) throw new Error(body.error || `HTTP ${res.status}`);
+    if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
 
-    showSpotifyMessage('done', `${body.playlist.name} is ready.`, body.playlist.spotify_url);
-    els.spotifySongs.replaceChildren(...body.songs.map((song) => {
+    pendingPlaylist = { genre, songs: data.songs, requestId };
+    showSpotifyMessage('idle', `${genre} songs for this vibe:`);
+    els.spotifySongs.replaceChildren(...data.songs.map((song) => {
       const li = document.createElement('li');
       const artist = document.createElement('span');
       artist.className = 'artist';
@@ -416,15 +430,41 @@ async function makePlaylist(genre, requestId) {
       return li;
     }));
     els.spotifySongs.hidden = false;
-    addLogEntry(`Playlist: ${genre}`, 'snap');
+    els.spotifySave.disabled = false;
+    els.spotifySave.hidden = false;
   } catch (err) {
-    console.error('playlist:', err);
+    console.error('songs:', err);
     if (requestId === latestGenreRequest) {
-      showSpotifyMessage('error', `Couldn’t make a playlist: ${err.message}`);
+      showSpotifyMessage('error', `Couldn’t find songs: ${err.message}`);
     }
   }
 }
 
+// Saves exactly the songs on screen, so the playlist matches what was shown.
+async function savePlaylist() {
+  if (!pendingPlaylist) return;
+  const { genre, songs, requestId } = pendingPlaylist;
+  els.spotifySave.disabled = true;
+  showSpotifyMessage('loading', `Saving your ${genre} playlist…`);
+  try {
+    const { res, data } = await postSpotify('/api/playlist', { genre, uris: songs.map((s) => s.uri) });
+    if (requestId !== latestGenreRequest) return;
+    if (res.status === 401) setSpotifyConnected(false);
+    if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
+
+    els.spotifySave.hidden = true;
+    showSpotifyMessage('done', `Saved “${data.playlist.name}”.`, data.playlist.spotify_url);
+    addLogEntry(`Playlist saved: ${genre}`, 'snap');
+  } catch (err) {
+    console.error('playlist:', err);
+    if (requestId === latestGenreRequest) {
+      els.spotifySave.disabled = false;
+      showSpotifyMessage('error', `Couldn’t save the playlist: ${err.message}`);
+    }
+  }
+}
+
+els.spotifySave.addEventListener('click', savePlaylist);
 els.spotifyDisconnect.addEventListener('click', async () => {
   await fetch('/spotify/logout', { method: 'POST' }).catch(() => {});
   setSpotifyConnected(false);

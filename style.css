@@ -319,6 +319,14 @@ input[type="range"] { width: 100%; }
   font-size: 0.9rem;
 }
 .spotify-songs .artist { color: var(--muted); }
+.spotify-save {
+  justify-self: start;
+  padding: 8px 16px;
+  border-radius: 999px;
+  background: #1db954;
+  color: #0b1d10;
+  font-weight: 600;
+}
 
 .snapshots { margin-top: 24px; }
 .snapshots h2 { font-size: 1rem; margin: 0 0 10px; }

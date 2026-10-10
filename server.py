@@ -1,8 +1,9 @@
 """Flask server for spot-a-vibe.
 
-Serves the static app, exposes POST /api/genre for genre detection, and lets
-users sign in with Spotify so POST /api/playlist can create a playlist for their
-genre on their account. Genre detection runs in one of three places:
+Serves the static app, exposes POST /api/genre for genre detection, and lets a
+user sign in with Spotify to get songs for their genre (POST /api/playlist/songs)
+and save them as a playlist on their account (POST /api/playlist). Genre
+detection runs in one of three places:
 
   - a Hugging Face Inference Endpoint (CLEF_ENDPOINT_URL set): the snapshot is
     forwarded there, so this server needs no GPU or model dependencies
@@ -28,6 +29,7 @@ import io
 import logging
 import os
 import random
+import re
 import secrets
 import time
 from urllib.parse import urlencode
@@ -189,6 +191,8 @@ def spotify_login():
         "scope": SPOTIFY_SCOPES,
         "redirect_uri": SPOTIFY_REDIRECT_URI,
         "state": session["spotify_state"],
+        # Always show Spotify's dialog, so after disconnecting, a different account can sign in.
+        "show_dialog": "true",
     }))
 
 
@@ -216,21 +220,24 @@ def spotify_logout():
     return jsonify(connected=False)
 
 
-@app.post("/api/playlist")
-def playlist():
-    genre = (request.get_json(silent=True) or {}).get("genre")
+# A Spotify track URI, as returned by search_songs.
+TRACK_URI = re.compile(r"spotify:track:[A-Za-z0-9]{22}")
+
+
+def spotify_genre_request(handler):
+    """Checks the genre and sign-in shared by the playlist routes, then calls
+    handler(token, genre, data) and turns Spotify failures into errors for the page."""
+    data = request.get_json(silent=True) or {}
+    genre = data.get("genre")
     if genre not in GENRES:
         return jsonify(error=f"genre must be one of {', '.join(GENRES)}"), 400
     token = spotify_access_token()
     if token is None:
         return jsonify(error="connect Spotify first"), 401
     try:
-        songs = search_songs(token, genre)
-        if not songs:
-            return jsonify(error=f"Spotify found no {genre} songs"), 404
-        return jsonify(genre=genre, playlist=create_playlist(token, genre, songs), songs=songs)
+        return handler(token, genre, data)
     except requests.HTTPError as err:
-        app.logger.exception("Spotify playlist failed")
+        app.logger.exception("Spotify request failed")
         if err.response.status_code == 401:
             # The user revoked access or the token is no longer valid; sign them out.
             session.pop("spotify", None)
@@ -238,10 +245,35 @@ def playlist():
         if err.response.status_code == 403:
             # Development-mode apps only work for accounts on the app's allowlist.
             return jsonify(error="this Spotify account isn't allowed to use the app yet"), 403
-        return jsonify(error="Spotify couldn't make the playlist"), 502
+        return jsonify(error="Spotify request failed"), 502
     except requests.RequestException:
         app.logger.exception("could not reach Spotify")
         return jsonify(error="could not reach Spotify"), 502
+
+
+@app.post("/api/playlist/songs")
+def playlist_songs():
+    def find(token, genre, data):
+        songs = search_songs(token, genre)
+        if not songs:
+            return jsonify(error=f"Spotify found no {genre} songs"), 404
+        return jsonify(genre=genre, songs=songs)
+
+    return spotify_genre_request(find)
+
+
+@app.post("/api/playlist")
+def save_playlist():
+    def save(token, genre, data):
+        # Save exactly the songs the page showed; searching again would pick different ones.
+        uris = data.get("uris")
+        if not isinstance(uris, list) or not 0 < len(uris) <= 100 or not all(
+            isinstance(uri, str) and TRACK_URI.fullmatch(uri) for uri in uris
+        ):
+            return jsonify(error="uris must be a list of 1 to 100 Spotify track URIs"), 400
+        return jsonify(genre=genre, playlist=create_playlist(token, genre, uris))
+
+    return spotify_genre_request(save)
 
 
 @app.get("/api/spotify/status")

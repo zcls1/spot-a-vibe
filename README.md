@@ -57,10 +57,11 @@ Health checks can use `GET /healthz`. If the endpoint has scaled to zero, the fi
 
 ### Spotify
 
-Once someone connects their Spotify account from the "Detected vibe" card, every new vibe gets a private playlist of its top genre on their account, linked from the card.
+Connect a Spotify account from the "Detected vibe" card before starting the camera (signing in leaves the page). After that, every new vibe shows songs from its top genre, and **Save playlist to Spotify** saves them as a private playlist on that account. One account is connected at a time; **Disconnect Spotify** lets another one sign in.
 
 - **Sign-in:** `/spotify/login` signs the user in (Authorization Code flow, with permission to create playlists), and `/api/spotify/status` reports whether they are connected. Tokens are kept in the signed session cookie and refreshed automatically.
-- **Playlists:** `POST /api/playlist` with `{"genre": "Jazz"}` searches Spotify for tracks in that genre (`genre:"jazz"`, up to 10, the most Spotify allows per search) and saves them to a new playlist called "spot-a-vibe: Jazz" (`spotify_service.py`).
+- **Songs:** `POST /api/playlist/songs` with `{"genre": "Jazz"}` searches Spotify for tracks in that genre (`genre:"jazz"`, 10 at a time, the most Spotify allows per search). The search starts at a random point in the first ~100 results, so the same genre gives different songs each time.
+- **Saving:** `POST /api/playlist` with `{"genre": "Jazz", "uris": [...]}` saves exactly those tracks to a new playlist called "spot-a-vibe: Jazz" (`spotify_service.py`).
 - **Development mode:** until the Spotify app has extended quota, it only works for up to 5 Spotify accounts on the app's allowlist (Developer Dashboard → your app → Settings → User Management), and the app owner needs Spotify Premium.
 
 For local runs, the variables can go in a `.env` file instead of the environment.
@@ -71,7 +72,7 @@ For local runs, the variables can go in a `.env` file instead of the environment
 
 - Each snapshot is uploaded to `POST /api/genre`. The server checks it with Pillow and runs it through Clef-Flash (`endpoint/handler.py`, either locally or on the Inference Endpoint) as a Jev/SystemOne `choice` question over the 9 genres, asking it to judge only clothing and accessories.
 - The answer comes back with a probability for every genre. The "Detected vibe" card under the camera shows the top genre, its confidence and a ranked bar for each genre; each snapshot in the gallery is labelled with its genre too (hover for the full breakdown).
-- If Spotify is connected, the newest result's top genre is turned into a playlist (see [Spotify](#spotify)), shown at the bottom of the card with a link and its songs.
+- If Spotify is connected, the bottom of the card lists songs from the newest result's top genre, with a button to save them as a playlist (see [Spotify](#spotify)).
 - The card shows the current stage: waiting, countdown, "Reading the vibe…" while the model runs, then the result, or the error if the model fails. If several snapshots are in flight, only the newest result is shown.
 
 ### Spotting a person
