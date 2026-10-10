@@ -72,6 +72,39 @@ h1 { margin: 0; font-size: 1.8rem; letter-spacing: -0.02em; }
 }
 .placeholder[hidden] { display: none; }
 
+.countdown {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: clamp(4rem, 18vw, 10rem);
+  font-weight: 700;
+  color: white;
+  text-shadow: 0 4px 24px rgba(0, 0, 0, 0.6);
+  pointer-events: none;
+}
+.countdown[hidden] { display: none; }
+.countdown.tick { animation: tick 1s ease-out; }
+@keyframes tick {
+  from { transform: scale(1.4); opacity: 0; }
+  20% { opacity: 1; }
+  to { transform: scale(1); opacity: 0.85; }
+}
+
+.flash {
+  position: absolute;
+  inset: 0;
+  background: white;
+  opacity: 0;
+  pointer-events: none;
+}
+.flash.go { animation: flash 0.5s ease-out; }
+@keyframes flash {
+  from { opacity: 0.9; }
+  to { opacity: 0; }
+}
+
 button {
   font: inherit;
   padding: 10px 20px;
@@ -165,3 +198,26 @@ input[type="range"] { width: 100%; }
 .log li .t { color: var(--muted); margin-right: 8px; }
 .log li.in { color: var(--present); }
 .log li.out { color: var(--away); }
+.log li.snap { color: #8fa8ff; }
+
+.snapshots { margin-top: 24px; }
+.snapshots h2 { font-size: 1rem; margin: 0 0 10px; }
+.snapshots .empty { color: var(--muted); margin: 0; }
+.snap-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 12px;
+}
+.snap-grid figure {
+  margin: 0;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  overflow: hidden;
+}
+.snap-grid img { display: block; width: 100%; }
+.snap-grid figcaption {
+  padding: 6px 10px;
+  font-size: 0.8rem;
+  color: var(--muted);
+}

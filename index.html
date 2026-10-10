@@ -18,6 +18,8 @@
       <div class="video-wrap">
         <video id="video" playsinline muted></video>
         <canvas id="overlay"></canvas>
+        <div id="countdown" class="countdown" hidden></div>
+        <div id="flash" class="flash"></div>
         <div id="placeholder" class="placeholder">
           <p id="loadStatus">Loading…</p>
           <button id="startBtn" disabled>Start camera</button>
@@ -61,6 +63,12 @@
           <ol id="log"></ol>
         </div>
       </aside>
+    </section>
+
+    <section class="snapshots">
+      <h2>Snapshots</h2>
+      <p id="noSnapshots" class="empty">A photo is taken 3 seconds after someone is detected.</p>
+      <div id="snapshots" class="snap-grid"></div>
     </section>
   </main>
 

@@ -12,6 +12,7 @@ const NET_SIZE = 300;         // MobileNet-SSD input resolution (must match the 
 const OVERLAY_WIDTH = 640;    // resolution boxes are drawn at
 const TARGET_FPS = 10;        // upper bound; in practice inference speed is the limit
 const CONFIRM_FRAMES = 3;     // consecutive detections required before declaring presence
+const COUNTDOWN_SECONDS = 3;  // delay between someone arriving and the snapshot
 
 const $ = (id) => document.getElementById(id);
 const els = {
@@ -33,11 +34,16 @@ const els = {
   boxes: $('boxes'),
   notify: $('notify'),
   log: $('log'),
+  countdown: $('countdown'),
+  flash: $('flash'),
+  snapshots: $('snapshots'),
+  noSnapshots: $('noSnapshots'),
 };
 
 let procCanvas, procCtx, overlayCtx;
 let running = false;
 let frameStartedAt = 0;
+let countdownTimer = null;
 
 const presence = {
   state: 'unknown',       // 'unknown' | 'present' | 'away'
@@ -161,7 +167,10 @@ function setPresence(state, since) {
   els.presenceText.textContent = state === 'present' ? 'Someone’s here' : 'Nobody’s here';
   document.title = `${state === 'present' ? '🟢' : '🔴'} spot-a-vibe`;
 
-  addLogEntry(state);
+  addLogEntry(state === 'present' ? 'Arrived' : 'Left', state === 'present' ? 'in' : 'out');
+  if (state === 'present') startCountdown();
+  else cancelCountdown();
+
   if (prev !== 'unknown' && els.notify.checked && Notification.permission === 'granted') {
     new Notification('spot-a-vibe', {
       body: state === 'present' ? 'Someone sat down in front of the camera.' : 'Nobody is in front of the camera.',
@@ -170,15 +179,87 @@ function setPresence(state, since) {
   }
 }
 
-function addLogEntry(state) {
+function addLogEntry(text, className) {
   const li = document.createElement('li');
-  li.className = state === 'present' ? 'in' : 'out';
+  li.className = className;
   const t = document.createElement('span');
   t.className = 't';
   t.textContent = new Date().toLocaleTimeString();
-  li.append(t, state === 'present' ? 'Arrived' : 'Left');
+  li.append(t, text);
   els.log.prepend(li);
   while (els.log.children.length > 50) els.log.lastChild.remove();
+}
+
+// Counts down once per arrival, then snaps a photo. Leaving cancels it.
+function startCountdown() {
+  cancelCountdown();
+  let remaining = COUNTDOWN_SECONDS;
+  showCountdown(remaining);
+  countdownTimer = setInterval(() => {
+    remaining--;
+    if (remaining > 0) {
+      showCountdown(remaining);
+    } else {
+      cancelCountdown();
+      takeSnapshot();
+    }
+  }, 1000);
+}
+
+function cancelCountdown() {
+  clearInterval(countdownTimer);
+  countdownTimer = null;
+  els.countdown.hidden = true;
+}
+
+function showCountdown(n) {
+  els.countdown.textContent = n;
+  els.countdown.hidden = false;
+  // Restart the CSS animation for each tick.
+  els.countdown.classList.remove('tick');
+  void els.countdown.offsetWidth;
+  els.countdown.classList.add('tick');
+}
+
+// Captures the full-resolution camera frame (without boxes), mirrored to match the preview.
+function takeSnapshot() {
+  const { videoWidth: w, videoHeight: h } = els.video;
+  const canvas = document.createElement('canvas');
+  canvas.width = w;
+  canvas.height = h;
+  const ctx = canvas.getContext('2d');
+  ctx.translate(w, 0);
+  ctx.scale(-1, 1);
+  ctx.drawImage(els.video, 0, 0, w, h);
+
+  els.flash.classList.remove('go');
+  void els.flash.offsetWidth;
+  els.flash.classList.add('go');
+
+  const takenAt = new Date();
+  canvas.toBlob((blob) => addSnapshot(blob, takenAt), 'image/png');
+  addLogEntry('Snapshot taken', 'snap');
+}
+
+function addSnapshot(blob, takenAt) {
+  const url = URL.createObjectURL(blob);
+  const stamp = takenAt.toISOString().replace(/[:.]/g, '-');
+
+  const fig = document.createElement('figure');
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = `spot-a-vibe-${stamp}.png`;
+  link.title = 'Download';
+  const img = document.createElement('img');
+  img.src = url;
+  img.alt = `Snapshot taken at ${takenAt.toLocaleTimeString()}`;
+  link.append(img);
+  const caption = document.createElement('figcaption');
+  caption.textContent = `${takenAt.toLocaleTimeString()} · click to download`;
+  fig.append(link, caption);
+
+  els.noSnapshots.hidden = true;
+  els.snapshots.prepend(fig);
 }
 
 function drawOverlay(people) {

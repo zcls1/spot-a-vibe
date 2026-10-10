@@ -18,4 +18,5 @@ python3 -m http.server 8000
 - Each frame is resized to 300×300 and run through the network; only "person" detections above the confidence threshold (the Sensitivity slider) and covering at least 4% of the frame are kept. That excludes people far away in the background.
 - Because it detects whole people, not faces, it still works if you're facing away, looking down, or only partly in frame.
 - Presence is debounced: 3 consecutive detections → **present**; nobody detected for the "Away after" grace period → **away**.
+- When someone arrives, a 3-second countdown appears over the video, then a full-resolution snapshot (mirrored like the preview, without detection boxes) is added to the Snapshots gallery; click one to download it. Leaving before the countdown ends cancels it, and only one snapshot is taken per arrival.
 - Arrivals/departures are logged, reflected in the tab title, and optionally sent as desktop notifications.
