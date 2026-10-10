@@ -16,9 +16,7 @@ pip install -r requirements.txt
 python server.py            # serves http://127.0.0.1:8000
 ```
 
-The first run downloads the model (~19 GB). Startup then takes about a minute: loading the weights, plus one warm-up pass so the first snapshot isn't slow. On an M3 Max each snapshot takes about 2 seconds after that. The device is picked automatically (CUDA, then Apple GPU, then CPU); override it with `CLEF_DEVICE`.
-
-To work on the front end without the model, `CLEF_STUB=1 python server.py` skips it and returns random genre probabilities.
+The first run downloads the model (~19 GB). Startup then takes about a minute: loading the weights, plus one warm-up pass so the first snapshot isn't slow. To work on the front end without the model, `CLEF_STUB=1 python server.py` skips it and returns random genre probabilities.
 
 Camera access requires a secure context, so open the page via `localhost` or HTTPS, not `file://`.
 
