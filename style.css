@@ -216,6 +216,12 @@ input[type="range"] { width: 100%; }
   overflow: hidden;
 }
 .snap-grid img { display: block; width: 100%; }
+.snap-grid .genre {
+  margin: 0;
+  padding: 8px 10px 0;
+  font-weight: 600;
+}
+.snap-grid .genre.failed { color: var(--muted); font-weight: 400; }
 .snap-grid figcaption {
   padding: 6px 10px;
   font-size: 0.8rem;

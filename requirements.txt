@@ -1,0 +1,7 @@
+flask>=3.1
+pillow>=11
+# Versions the Clef-Flash model card was tested with.
+torch>=2.11
+transformers==5.10.2
+huggingface_hub
+safetensors

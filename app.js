@@ -55,7 +55,7 @@ const presence = {
 const detector = new Worker('detector.worker.js');
 detector.onmessage = ({ data }) => {
   if (data.type === 'ready') {
-    els.loadStatus.textContent = 'Ready. Your video never leaves this device.';
+    els.loadStatus.textContent = 'Ready. Only snapshots are sent to the server, for genre detection.';
     els.startBtn.disabled = false;
   } else if (data.type === 'result') {
     onDetections(data.people);
@@ -256,10 +256,39 @@ function addSnapshot(blob, takenAt) {
   link.append(img);
   const caption = document.createElement('figcaption');
   caption.textContent = `${takenAt.toLocaleTimeString()} · click to download`;
-  fig.append(link, caption);
+  const genre = document.createElement('p');
+  genre.className = 'genre';
+  genre.textContent = 'Reading the vibe…';
+  fig.append(link, genre, caption);
 
   els.noSnapshots.hidden = true;
   els.snapshots.prepend(fig);
+
+  classifyGenre(blob, stamp).then(
+    (answer) => {
+      genre.textContent = `${answer.choice} · ${Math.round(answer.confidence * 100)}%`;
+      genre.title = Object.entries(answer.probabilities)
+        .sort((a, b) => b[1] - a[1])
+        .map(([name, p]) => `${name}: ${Math.round(p * 100)}%`)
+        .join('\n');
+      addLogEntry(`Vibe: ${answer.choice}`, 'snap');
+    },
+    (err) => {
+      console.error('genre:', err);
+      genre.textContent = 'Genre unavailable';
+      genre.classList.add('failed');
+    },
+  );
+}
+
+// Sends a snapshot to the Flask server, which runs it through Clef-Flash.
+async function classifyGenre(blob, stamp) {
+  const form = new FormData();
+  form.append('image', blob, `snapshot-${stamp}.png`);
+  const res = await fetch('/api/genre', { method: 'POST', body: form });
+  const body = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(body.error || `HTTP ${res.status}`);
+  return body.answers.genre;
 }
 
 function drawOverlay(people) {

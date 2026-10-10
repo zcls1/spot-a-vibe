@@ -5,12 +5,16 @@ Detects whether a person is in front of your laptop camera, entirely in the brow
 
 ## Run
 
-Camera access requires a secure context, so serve the folder over `localhost` (opening `index.html` as a `file://` won't work):
+The Flask server serves the page and runs genre detection with [Clef-Flash](https://huggingface.co/Cloudflare/clef-flash). The model is ~19 GB (9.4B parameters, bf16) and its model card was tested on an NVIDIA H200, so run the server on a machine with a large GPU:
 
 ```sh
-python3 -m http.server 8000
-# then open http://localhost:8000
+pip install -r requirements.txt
+python server.py            # downloads the model on first run, then serves http://127.0.0.1:8000
 ```
+
+To work on the front end without a GPU, `CLEF_STUB=1 python server.py` skips the model and returns equal probabilities for every genre.
+
+Camera access requires a secure context, so open the page via `localhost` or HTTPS, not `file://`.
 
 ## How it works
 
@@ -19,4 +23,5 @@ python3 -m http.server 8000
 - Because it detects whole people, not faces, it still works if you're facing away, looking down, or only partly in frame.
 - Presence is debounced: 3 consecutive detections → **present**; nobody detected for the "Away after" grace period → **away**.
 - When someone arrives, a 3-second countdown appears over the video, then a full-resolution snapshot (mirrored like the preview, without detection boxes) is added to the Snapshots gallery; click one to download it. Leaving before the countdown ends cancels it, and only one snapshot is taken per arrival.
+- Each snapshot is uploaded to `POST /api/genre`. The server opens it with Pillow and sends it to Clef-Flash as a Jev/SystemOne `choice` question over 9 genres. The predicted genre and confidence appear under the snapshot; hover for the full breakdown.
 - Arrivals/departures are logged, reflected in the tab title, and optionally sent as desktop notifications.
