@@ -1,15 +1,13 @@
 # spot-a-vibe
 Knight Hacks IX
 
-Step in front of your laptop camera and spot-a-vibe guesses your music taste. When it sees someone, it counts down and snaps a photo (or press **Capture** to snap one right away), then asks [Cloudflare's Clef-Flash](https://huggingface.co/Cloudflare/clef-flash) model which genre fits their style (clothes and accessories only, never height, race or weight).
-
-The result appears under the camera as "Your vibe is": the top genre, how confident the model is, and a ranked breakdown across all nine genres (Pop, Rock, Metal, Rap, R&B, Country, Electronic, EDM and Jazz). With Spotify connected, it also shows songs for that genre that can be saved as a playlist.
+Step in front of your laptop camera and spot-a-vibe guesses your music taste. When it sees someone, it counts down and snaps a photo (or press **Capture** to snap one right away), then asks [Cloudflare's Clef-Flash](https://huggingface.co/Cloudflare/clef-flash) model which genre fits their style. The result appears under the camera as "Your vibe is": the top genre, how confident the model is, and a ranked breakdown across all nine genres: Pop, Rock, Metal, Rap, R&B, Country, Electronic, EDM and Jazz. With Spotify connected, it also suggests songs for the vibe that can be saved as a playlist.
 
 Person detection runs entirely in the browser with [OpenCV.js](https://docs.opencv.org/4.9.0/opencv.js) and a MobileNet-SSD object detector. Only the snapshots are sent to the Flask server for genre detection.
 
 ## Run
 
-The Flask server serves the page and runs genre detection with [Clef-Flash](https://huggingface.co/Cloudflare/clef-flash), loaded directly with PyTorch. The model is ~19 GB (9.4B parameters, bf16), so you need a machine with an NVIDIA GPU or an Apple Silicon Mac with enough memory (tested on an M3 Max with 36 GB).
+The Flask server serves the page and runs genre detection with [Clef-Flash](https://huggingface.co/Cloudflare/clef-flash), loaded directly with PyTorch. 
 
 ```sh
 python3 -m venv .venv
@@ -18,9 +16,7 @@ pip install -r requirements.txt -r endpoint/requirements.txt
 python server.py            # serves http://127.0.0.1:8000
 ```
 
-The first run downloads the model (~19 GB). Startup then takes about a minute: loading the weights, plus one warm-up pass so the first snapshot isn't slow. On an M3 Max each snapshot takes about 2 seconds after that. The device is picked automatically (CUDA, then Apple GPU, then CPU); override it with `CLEF_DEVICE`.
-
-To work on the front end without the model, `CLEF_STUB=1 python server.py` skips it and returns random genre probabilities. That only needs `requirements.txt`.
+The first run downloads the model (~19 GB). Startup then takes about a minute: loading the weights, plus one warm-up pass so the first snapshot isn't slow. To work on the front end without the model, `CLEF_STUB=1 python server.py` skips it and returns random genre probabilities; that only needs `requirements.txt`.
 
 Camera access requires a secure context, so open the page via `localhost` or HTTPS, not `file://`.
 
