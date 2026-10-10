@@ -1,0 +1,73 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>spot-a-vibe</title>
+  <link rel="icon" href="data:," />
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <main>
+    <header>
+      <h1>spot-a-vibe</h1>
+      <p class="sub">Detects whether someone is in front of your camera — entirely in your browser with OpenCV.js.</p>
+    </header>
+
+    <section class="stage">
+      <div class="video-wrap">
+        <video id="video" playsinline muted></video>
+        <canvas id="overlay"></canvas>
+        <div id="placeholder" class="placeholder">
+          <p id="loadStatus">Loading OpenCV…</p>
+          <button id="startBtn" disabled>Start camera</button>
+        </div>
+      </div>
+
+      <aside class="panel">
+        <div id="presence" class="presence unknown">
+          <span class="dot"></span>
+          <span id="presenceText">Waiting</span>
+        </div>
+
+        <dl class="stats">
+          <div><dt>Faces</dt><dd id="faceCount">–</dd></div>
+          <div><dt>FPS</dt><dd id="fps">–</dd></div>
+          <div><dt>Present for</dt><dd id="presentFor">–</dd></div>
+          <div><dt>Away for</dt><dd id="awayFor">–</dd></div>
+        </dl>
+
+        <fieldset>
+          <legend>Settings</legend>
+          <label>
+            Sensitivity <output id="sensOut"></output>
+            <input id="sensitivity" type="range" min="1" max="8" step="1" value="5" />
+            <small>Higher = more detections, more false positives</small>
+          </label>
+          <label>
+            Away after <output id="graceOut"></output>
+            <input id="grace" type="range" min="0.5" max="10" step="0.5" value="2" />
+          </label>
+          <label class="check">
+            <input id="profile" type="checkbox" checked /> Detect side profiles
+          </label>
+          <label class="check">
+            <input id="boxes" type="checkbox" checked /> Show boxes
+          </label>
+          <label class="check">
+            <input id="notify" type="checkbox" /> Notify on change
+          </label>
+        </fieldset>
+
+        <div class="log">
+          <h2>Activity</h2>
+          <ol id="log"></ol>
+        </div>
+      </aside>
+    </section>
+  </main>
+
+  <script src="app.js"></script>
+  <script async src="https://docs.opencv.org/4.9.0/opencv.js" onerror="onOpenCvError()"></script>
+</body>
+</html>
