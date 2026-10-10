@@ -69,6 +69,12 @@ def load_model():
     model, processor = load_release_model(path, device=device)
     systemone = _systemone
 
+    # The first forward pass is much slower (on an M3 Max, ~28 s vs ~2 s after) while
+    # the GPU compiles kernels. Do it now so the first real snapshot isn't stuck.
+    print("Warming up the model…", flush=True)
+    classify(Image.new("RGB", (640, 480), "gray"))
+    print("Model ready.", flush=True)
+
 
 def classify(image):
     body = {
@@ -107,7 +113,12 @@ def genre():
         image = Image.open(upload.stream).convert("RGB")
     except UnidentifiedImageError:
         return jsonify(error="could not read the uploaded image"), 400
-    return jsonify(classify(image))
+    try:
+        return jsonify(classify(image))
+    except Exception as err:
+        # Surface model failures (e.g. an unsupported op on the chosen device) to the page.
+        app.logger.exception("genre classification failed")
+        return jsonify(error=f"model error: {err}"), 500
 
 
 # Only the front end is served, not server.py or anything else in the repo.
