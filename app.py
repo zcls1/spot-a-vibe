@@ -1,13 +1,13 @@
-# Import Flask tools for creating API endpoints and returning JSON
+# This imports Flask tools for creating API endpoints and returning JSON
 from flask import Flask, jsonify, request
 
-# Import the Spotify search function
+# This imports the Spotify search function
 from spotify_service import search_songs
 
-# Import the AI function that generates music tags
+# This Imports the AI function that generates music tags
 from clef_service import get_music_tags
 
-# Create the Flask application
+# And this will create the Flask application
 app = Flask(__name__)
 
 
@@ -17,25 +17,25 @@ def get_songs():
     # Read the JSON data sent to the API
     data = request.get_json(silent=True) or {}
 
-    # Get the music tags from the request
+    # And get the music tags from the request
     tags = data.get("tags", [])
 
-    # Make sure the tags are a non-empty list
+    # This will make sure the tags are a non-empty list
     if not isinstance(tags, list) or not tags:
         return jsonify({"error": "Please provide a list of music tags."}), 400
 
     try:
-        # Search Spotify for matching songs
+        # This will search Spotify for matching songs
         songs = search_songs(tags)
 
-        # Return the tags and matching songs
+        # This will return the tags and matching songs
         return jsonify({"tags": tags, "songs": songs})
 
     except Exception:
-        # Log the error for debugging
+        # This is just to log the error for debugging
         app.logger.exception("Spotify search failed")
 
-        # Send a safe error message to the client
+        # This sends a safe error message to the client
         return jsonify({"error": "Spotify search failed. Check the server logs."}), 502
 
 
@@ -56,7 +56,7 @@ def recommend_songs():
         # Ask Cloudflare AI to generate music tags
         tags = get_music_tags(vibe.strip())
 
-        # Search Spotify using the AI-generated tags
+        # Then search Spotify using the AI-generated tags
         songs = search_songs(tags)
 
         # Return the vibe, tags, and recommended songs
