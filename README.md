@@ -1,9 +1,7 @@
 # spot-a-vibe
 Knight Hacks IX
 
-Step in front of your laptop camera and spot-a-vibe guesses your music taste. When it sees someone, it counts down, snaps a photo, and asks [Cloudflare's Clef-Flash](https://huggingface.co/Cloudflare/clef-flash) model which genre fits their style (clothes and accessories only, never height, race or weight).
-
-The result appears under the camera feed as a "Detected vibe": the top genre, how confident the model is, and a ranked breakdown across all nine genres: Pop, Rock, Metal, Rap, R&B, Country, Electronic, EDM and Jazz.
+Step in front of your laptop camera and spot-a-vibe guesses your music taste. When it sees someone, it counts down, snaps a photo, and asks [Cloudflare's Clef-Flash](https://huggingface.co/Cloudflare/clef-flash) model which genre fits their style. The result appears under the camera feed as a "Detected vibe": the top genre, how confident the model is, and a ranked breakdown across all nine genres: Pop, Rock, Metal, Rap, R&B, Country, Electronic, EDM and Jazz.
 
 Person detection runs entirely in the browser with [OpenCV.js](https://docs.opencv.org/4.9.0/opencv.js) and a MobileNet-SSD object detector. Only the snapshots are sent to the local Flask server for genre detection.
 
