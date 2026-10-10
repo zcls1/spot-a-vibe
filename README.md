@@ -1,9 +1,9 @@
 # spot-a-vibe
 Knight Hacks IX
 
-Step in front of your laptop camera and spot-a-vibe guesses your music taste. When it sees someone, it counts down, snaps a photo, and asks [Cloudflare's Clef-Flash](https://huggingface.co/Cloudflare/clef-flash) model which genre fits their style (clothes and accessories only, never height, race or weight).
+Step in front of your laptop camera and spot-a-vibe guesses your music taste. When it sees someone, it counts down and snaps a photo (or press **Capture** to snap one right away), then asks [Cloudflare's Clef-Flash](https://huggingface.co/Cloudflare/clef-flash) model which genre fits their style (clothes and accessories only, never height, race or weight).
 
-The result appears under the camera feed as a "Detected vibe": the top genre, how confident the model is, and a ranked breakdown across all nine genres: Pop, Rock, Metal, Rap, R&B, Country, Electronic, EDM and Jazz.
+The result appears under the camera as "Your vibe is": the top genre, how confident the model is, and a ranked breakdown across all nine genres (Pop, Rock, Metal, Rap, R&B, Country, Electronic, EDM and Jazz). With Spotify connected, it also shows songs for that genre that can be saved as a playlist.
 
 Person detection runs entirely in the browser with [OpenCV.js](https://docs.opencv.org/4.9.0/opencv.js) and a MobileNet-SSD object detector. Only the snapshots are sent to the Flask server for genre detection.
 
@@ -57,7 +57,7 @@ Health checks can use `GET /healthz`. If the endpoint has scaled to zero, the fi
 
 ### Spotify
 
-Connect a Spotify account from the "Detected vibe" card before starting the camera (signing in leaves the page). After that, every new vibe shows songs from its top genre, and **Save playlist to Spotify** saves them as a private playlist on that account. One account is connected at a time; **Disconnect Spotify** lets another one sign in.
+Connect a Spotify account with the **Connect Spotify** bar above the camera. Signing in leaves the page, so the current vibe is kept in `sessionStorage` and shown again, with songs, on the way back; the camera then needs starting again. After that, every new vibe shows song cards (album art, title, artist, linking to Spotify) for its top genre, and **Save playlist to Spotify** saves them as a private playlist on that account. One account is connected at a time; **Disconnect** lets another one sign in.
 
 - **Sign-in:** `/spotify/login` signs the user in (Authorization Code flow, with permission to create playlists), and `/api/spotify/status` reports whether they are connected. Tokens are kept in the signed session cookie and refreshed automatically.
 - **Songs:** `POST /api/playlist/songs` with `{"genre": "Jazz"}` searches Spotify for tracks in that genre (`genre:"jazz"`, 10 at a time, the most Spotify allows per search). The search starts at a random point in the first ~100 results, so the same genre gives different songs each time.
@@ -71,9 +71,9 @@ For local runs, the variables can go in a `.env` file instead of the environment
 ### Genre detection
 
 - Each snapshot is uploaded to `POST /api/genre`. The server checks it with Pillow and runs it through Clef-Flash (`endpoint/handler.py`, either locally or on the Inference Endpoint) as a Jev/SystemOne `choice` question over the 9 genres, asking it to judge only clothing and accessories.
-- The answer comes back with a probability for every genre. The "Detected vibe" card under the camera shows the top genre, its confidence and a ranked bar for each genre; each snapshot in the gallery is labelled with its genre too (hover for the full breakdown).
-- If Spotify is connected, the bottom of the card lists songs from the newest result's top genre, with a button to save them as a playlist (see [Spotify](#spotify)).
-- The card shows the current stage: waiting, countdown, "Reading the vibe…" while the model runs, then the result, or the error if the model fails. If several snapshots are in flight, only the newest result is shown.
+- The answer comes back with a probability for every genre. The result under the camera shows the top genre, its confidence and, under "Full breakdown", a ranked bar for each genre; each snapshot in the gallery is labelled with its genre too (hover for the full breakdown).
+- If Spotify is connected, song cards for the newest result's top genre follow, with a button to save them as a playlist (see [Spotify](#spotify)). **Scan again** runs the countdown for a fresh snapshot.
+- Before a result, the same spot shows the current stage: waiting, countdown, "Reading the vibe…" while the model runs, then the result, or the error if the model fails. If several snapshots are in flight, only the newest result is shown.
 
 ### Spotting a person
 

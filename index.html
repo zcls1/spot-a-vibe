@@ -8,56 +8,66 @@
   <link rel="stylesheet" href="style.css" />
 </head>
 <body>
-  <main>
-    <header>
-      <h1>spot-a-vibe</h1>
-      <p class="sub">Detects whether someone is in front of your camera with OpenCV.js, then guesses their music genre from their style.</p>
-    </header>
+  <header class="header">
+    <h1>Spot-a-Vibe</h1>
+    <p>Center yourself in front of the camera</p>
+  </header>
 
-    <section class="stage">
-      <div class="feed">
+  <main>
+    <section id="spotify" class="spotify-bar" hidden>
+      <p id="spotifyAccount" class="spotify-account"></p>
+      <a id="spotifyConnect" class="pill" href="/spotify/login" hidden>Connect Spotify</a>
+      <button id="spotifyDisconnect" class="link-button" type="button" hidden>Disconnect</button>
+    </section>
+
+    <section id="camera" class="camera">
       <div class="video-wrap">
         <video id="video" playsinline muted></video>
         <canvas id="overlay"></canvas>
-        <div id="countdown" class="countdown" hidden></div>
-        <div id="flash" class="flash"></div>
-        <div id="placeholder" class="placeholder">
-          <p id="loadStatus">Loading…</p>
-          <button id="startBtn" disabled>Start camera</button>
-        </div>
-      </div>
-
-      <section id="vibe" class="vibe" data-state="idle" aria-live="polite">
-        <div class="vibe-head">
-          <h2>Detected vibe</h2>
-          <span id="vibeTime" class="vibe-time"></span>
-        </div>
-        <p id="vibeMessage" class="vibe-message">Waiting for someone to step in front of the camera.</p>
-        <div id="vibeResult" class="vibe-result" hidden>
-          <div class="vibe-top">
-            <span id="vibeGenre" class="vibe-genre"></span>
-            <span id="vibeConfidence" class="vibe-confidence"></span>
-          </div>
-          <ol id="vibeBars" class="vibe-bars" aria-label="Probability for each genre"></ol>
-        </div>
-        <div id="spotify" class="spotify" data-state="idle" hidden>
-          <p id="spotifyMessage" class="spotify-message"></p>
-          <div class="spotify-actions">
-            <a id="spotifyConnect" class="spotify-connect" href="/spotify/login" hidden>Connect Spotify</a>
-            <button id="spotifyDisconnect" class="link-button" type="button" hidden>Disconnect Spotify</button>
-          </div>
-          <ol id="spotifySongs" class="spotify-songs" aria-label="Songs for this vibe" hidden></ol>
-          <button id="spotifySave" class="spotify-save" type="button" hidden>Save playlist to Spotify</button>
-        </div>
-      </section>
-      </div>
-
-      <aside class="panel">
         <div id="presence" class="presence unknown">
           <span class="dot"></span>
           <span id="presenceText">Waiting</span>
         </div>
+        <div id="countdown" class="countdown" hidden></div>
+        <div id="flash" class="flash"></div>
+        <div id="placeholder" class="placeholder">
+          <p id="loadStatus">Loading…</p>
+          <button id="startBtn" class="pill" disabled>Start camera</button>
+        </div>
+      </div>
+      <button id="captureBtn" class="pill capture" type="button" disabled>Capture</button>
+    </section>
 
+    <section id="vibe" class="vibe" data-state="idle" aria-live="polite">
+      <p id="vibeMessage" class="vibe-message">Step in front of the camera, or press Capture.</p>
+      <div id="vibeResult" class="vibe-result" hidden>
+        <p class="vibe-label">Your vibe is</p>
+        <h2 id="vibeGenre" class="vibe-genre"></h2>
+        <p class="vibe-meta"><span id="vibeConfidence"></span> · <span id="vibeTime"></span></p>
+        <details class="vibe-breakdown">
+          <summary>Full breakdown</summary>
+          <ol id="vibeBars" class="vibe-bars" aria-label="Probability for each genre"></ol>
+        </details>
+      </div>
+
+      <div id="songs" class="songs" data-state="idle" hidden>
+        <p id="songsMessage" class="songs-message"></p>
+        <ol id="songList" class="song-list" aria-label="Songs for this vibe" hidden></ol>
+        <button id="spotifySave" class="pill" type="button" hidden>Save playlist to Spotify</button>
+      </div>
+
+      <button id="scanAgain" class="pill secondary" type="button" hidden>Scan again</button>
+    </section>
+
+    <section class="snapshots">
+      <h2>Snapshots</h2>
+      <p id="noSnapshots" class="empty">A photo is taken 3 seconds after someone is detected, or when you press Capture, then sent to the server to guess a genre.</p>
+      <div id="snapshots" class="snap-grid"></div>
+    </section>
+
+    <details class="detector">
+      <summary>Detector</summary>
+      <div class="detector-body">
         <dl class="stats">
           <div><dt>People</dt><dd id="personCount">–</dd></div>
           <div><dt>FPS</dt><dd id="fps">–</dd></div>
@@ -85,17 +95,11 @@
         </fieldset>
 
         <div class="log">
-          <h2>Activity</h2>
+          <h3>Activity</h3>
           <ol id="log"></ol>
         </div>
-      </aside>
-    </section>
-
-    <section class="snapshots">
-      <h2>Snapshots</h2>
-      <p id="noSnapshots" class="empty">A photo is taken 3 seconds after someone is detected, then sent to the server to guess a genre.</p>
-      <div id="snapshots" class="snap-grid"></div>
-    </section>
+      </div>
+    </details>
   </main>
 
   <script src="app.js"></script>

@@ -21,6 +21,7 @@ const els = {
   placeholder: $('placeholder'),
   loadStatus: $('loadStatus'),
   startBtn: $('startBtn'),
+  captureBtn: $('captureBtn'),
   presence: $('presence'),
   presenceText: $('presenceText'),
   personCount: $('personCount'),
@@ -45,11 +46,14 @@ const els = {
   vibeGenre: $('vibeGenre'),
   vibeConfidence: $('vibeConfidence'),
   vibeBars: $('vibeBars'),
+  scanAgain: $('scanAgain'),
   spotify: $('spotify'),
-  spotifyMessage: $('spotifyMessage'),
+  spotifyAccount: $('spotifyAccount'),
   spotifyConnect: $('spotifyConnect'),
   spotifyDisconnect: $('spotifyDisconnect'),
-  spotifySongs: $('spotifySongs'),
+  songs: $('songs'),
+  songsMessage: $('songsMessage'),
+  songList: $('songList'),
   spotifySave: $('spotifySave'),
 };
 
@@ -59,6 +63,7 @@ let frameStartedAt = 0;
 let countdownTimer = null;
 let latestGenreRequest = 0;  // ignore responses for snapshots older than the newest one
 let lastVibe = null;         // { answer, takenAt } of the most recent result
+let spotifyConfigured = false;
 let spotifyConnected = false;
 let pendingPlaylist = null;  // { genre, songs, requestId } shown in the card, ready to save
 
@@ -118,6 +123,7 @@ async function startCamera() {
   overlayCtx = els.overlay.getContext('2d');
 
   els.placeholder.hidden = true;
+  els.captureBtn.disabled = false;
   presence.since = performance.now();
   running = true;
   sendFrame();
@@ -192,7 +198,7 @@ function setPresence(state, since) {
     // Leaving mid-countdown: go back to whatever the card showed before.
     if (els.vibe.dataset.state === 'countdown') {
       if (lastVibe) showVibeResult(lastVibe.answer, lastVibe.takenAt);
-      else showVibeStatus('idle', 'Waiting for someone to step in front of the camera.');
+      else showVibeStatus('idle', 'Step in front of the camera, or press Capture.');
     }
   }
 
@@ -318,19 +324,23 @@ function addSnapshot(blob, takenAt) {
   );
 }
 
-// Vibe card: idle / countdown / loading / error show a message; result shows the genre breakdown.
+// Vibe card: idle / countdown / loading / error show a message; result shows the genre,
+// its breakdown and, when Spotify is set up, songs for it.
 function showVibeStatus(state, message) {
   els.vibe.dataset.state = state;
   els.vibeMessage.textContent = message;
   els.vibeMessage.hidden = false;
   els.vibeResult.hidden = true;
-  els.vibeTime.textContent = '';
+  els.songs.hidden = true;
+  els.scanAgain.hidden = true;
 }
 
 function showVibeResult(answer, takenAt) {
   els.vibe.dataset.state = 'result';
   els.vibeMessage.hidden = true;
   els.vibeResult.hidden = false;
+  els.songs.hidden = !spotifyConfigured;
+  els.scanAgain.hidden = !running;
   els.vibeGenre.textContent = answer.choice;
   els.vibeConfidence.textContent = `${Math.round(answer.confidence * 100)}% confident`;
   els.vibeTime.textContent = `from ${takenAt.toLocaleTimeString()}`;
@@ -356,17 +366,33 @@ function showVibeResult(answer, takenAt) {
   }));
 }
 
-// Spotify section of the vibe card: hidden unless the server has Spotify set up. Once
-// the user connects, each new vibe shows songs from its top genre, which they can
-// save as a playlist on their account. Connecting leaves the page, so do it before
-// starting the camera.
+// Spotify: the account bar and song list stay hidden unless the server has Spotify set
+// up. Once the user connects, each new vibe shows songs from its top genre, which they
+// can save as a playlist on their account. Signing in leaves the page, so the current
+// vibe is kept in sessionStorage and shown again (with songs) on the way back.
+const RESTORE_KEY = 'spot-a-vibe:vibe';
+
 async function initSpotify() {
+  let restored = null;
+  try {
+    restored = JSON.parse(sessionStorage.getItem(RESTORE_KEY));
+    sessionStorage.removeItem(RESTORE_KEY);
+  } catch {}
   try {
     const res = await fetch('/api/spotify/status');
     const status = await res.json();
-    if (status.configured) setSpotifyConnected(status.connected);
+    if (!status.configured) return;
+    spotifyConfigured = true;
+    setSpotifyConnected(status.connected);
   } catch (err) {
     console.error('spotify:', err);
+    return;
+  }
+  // Only restore if nothing newer has been detected while the status was loading.
+  if (restored && !lastVibe) {
+    lastVibe = { answer: restored.answer, takenAt: new Date(restored.takenAt) };
+    showVibeResult(lastVibe.answer, lastVibe.takenAt);
+    findSongs(lastVibe.answer.choice, latestGenreRequest);
   }
 }
 
@@ -376,23 +402,28 @@ function setSpotifyConnected(connected) {
   els.spotify.hidden = false;
   els.spotifyConnect.hidden = connected;
   els.spotifyDisconnect.hidden = !connected;
-  els.spotifySongs.hidden = true;
+  els.spotifyAccount.textContent = connected
+    ? 'Spotify connected'
+    : 'Connect Spotify to get songs for your vibe';
+  els.songList.hidden = true;
   els.spotifySave.hidden = true;
-  showSpotifyMessage('idle', connected
-    ? 'Spotify connected. Each vibe gets songs you can save as a playlist.'
-    : 'Connect Spotify before starting the camera to get a playlist for each vibe.');
+  if (connected) {
+    showSongsMessage('idle', 'Songs for your vibe will show up here.');
+  } else {
+    showSongsMessage('idle', 'Connect Spotify above to get songs for this vibe.');
+  }
 }
 
-function showSpotifyMessage(state, text, link) {
-  els.spotify.dataset.state = state;
-  els.spotifyMessage.replaceChildren(text);
+function showSongsMessage(state, text, link) {
+  els.songs.dataset.state = state;
+  els.songsMessage.replaceChildren(text);
   if (link) {
     const a = document.createElement('a');
     a.href = link;
     a.target = '_blank';
     a.rel = 'noopener';
     a.textContent = 'Open in Spotify';
-    els.spotifyMessage.append(' ', a);
+    els.songsMessage.append(' ', a);
   }
 }
 
@@ -406,13 +437,44 @@ async function postSpotify(url, body) {
   return { res, data };
 }
 
+function songCard(song) {
+  const li = document.createElement('li');
+  const a = document.createElement('a');
+  a.className = 'song';
+  if (song.spotify_url) {
+    a.href = song.spotify_url;
+    a.target = '_blank';
+    a.rel = 'noopener';
+  }
+  // Some tracks have no album art; an empty tile keeps the cards aligned.
+  const cover = document.createElement(song.album_art ? 'img' : 'span');
+  cover.className = 'cover';
+  if (song.album_art) {
+    cover.src = song.album_art;
+    cover.alt = '';
+    cover.loading = 'lazy';
+  }
+  const info = document.createElement('span');
+  info.className = 'info';
+  const title = document.createElement('span');
+  title.className = 'title';
+  title.textContent = song.title;
+  const artist = document.createElement('span');
+  artist.className = 'artist';
+  artist.textContent = song.artist;
+  info.append(title, artist);
+  a.append(cover, info);
+  li.append(a);
+  return li;
+}
+
 // Only called for the newest snapshot; a newer one arriving mid-request wins.
 async function findSongs(genre, requestId) {
   if (!spotifyConnected) return;
   pendingPlaylist = null;
-  els.spotifySongs.hidden = true;
+  els.songList.hidden = true;
   els.spotifySave.hidden = true;
-  showSpotifyMessage('loading', `Finding ${genre} songs…`);
+  showSongsMessage('loading', `Finding ${genre} songs…`);
   try {
     const { res, data } = await postSpotify('/api/playlist/songs', { genre });
     if (requestId !== latestGenreRequest) return;
@@ -420,22 +482,15 @@ async function findSongs(genre, requestId) {
     if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
 
     pendingPlaylist = { genre, songs: data.songs, requestId };
-    showSpotifyMessage('idle', `${genre} songs for this vibe:`);
-    els.spotifySongs.replaceChildren(...data.songs.map((song) => {
-      const li = document.createElement('li');
-      const artist = document.createElement('span');
-      artist.className = 'artist';
-      artist.textContent = song.artist;
-      li.append(song.title, ' ', artist);
-      return li;
-    }));
-    els.spotifySongs.hidden = false;
+    showSongsMessage('idle', `${genre} songs for your vibe`);
+    els.songList.replaceChildren(...data.songs.map(songCard));
+    els.songList.hidden = false;
     els.spotifySave.disabled = false;
     els.spotifySave.hidden = false;
   } catch (err) {
     console.error('songs:', err);
     if (requestId === latestGenreRequest) {
-      showSpotifyMessage('error', `Couldn’t find songs: ${err.message}`);
+      showSongsMessage('error', `Couldn’t find songs: ${err.message}`);
     }
   }
 }
@@ -445,7 +500,7 @@ async function savePlaylist() {
   if (!pendingPlaylist) return;
   const { genre, songs, requestId } = pendingPlaylist;
   els.spotifySave.disabled = true;
-  showSpotifyMessage('loading', `Saving your ${genre} playlist…`);
+  showSongsMessage('loading', `Saving your ${genre} playlist…`);
   try {
     const { res, data } = await postSpotify('/api/playlist', { genre, uris: songs.map((s) => s.uri) });
     if (requestId !== latestGenreRequest) return;
@@ -453,23 +508,44 @@ async function savePlaylist() {
     if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
 
     els.spotifySave.hidden = true;
-    showSpotifyMessage('done', `Saved “${data.playlist.name}”.`, data.playlist.spotify_url);
+    showSongsMessage('done', `Saved “${data.playlist.name}” to your Spotify.`, data.playlist.spotify_url);
     addLogEntry(`Playlist saved: ${genre}`, 'snap');
   } catch (err) {
     console.error('playlist:', err);
     if (requestId === latestGenreRequest) {
       els.spotifySave.disabled = false;
-      showSpotifyMessage('error', `Couldn’t save the playlist: ${err.message}`);
+      showSongsMessage('error', `Couldn’t save the playlist: ${err.message}`);
     }
   }
 }
 
 els.spotifySave.addEventListener('click', savePlaylist);
+els.spotifyConnect.addEventListener('click', () => {
+  if (!lastVibe) return;
+  try {
+    sessionStorage.setItem(RESTORE_KEY, JSON.stringify({
+      answer: lastVibe.answer,
+      takenAt: lastVibe.takenAt.toISOString(),
+    }));
+  } catch {}
+});
 els.spotifyDisconnect.addEventListener('click', async () => {
   await fetch('/spotify/logout', { method: 'POST' }).catch(() => {});
   setSpotifyConnected(false);
 });
 initSpotify();
+
+// Capture snaps a photo right away; Scan again runs the countdown first.
+els.captureBtn.addEventListener('click', () => {
+  if (!running) return;
+  cancelCountdown();
+  takeSnapshot();
+});
+els.scanAgain.addEventListener('click', () => {
+  if (!running) return;
+  els.video.parentElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  startCountdown();
+});
 
 // Sends a snapshot to the Flask server, which runs it through Clef-Flash.
 async function classifyGenre(blob, stamp) {
