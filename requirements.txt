@@ -1,0 +1,8 @@
+# Flask creates the backend API server
+flask
+
+# Requests sends HTTP requests to Spotify
+requests
+
+# Loads credentials from the .env file
+python-dotenv
