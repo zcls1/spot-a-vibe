@@ -1,0 +1,86 @@
+body{
+    margin: 0;
+    padding: 0;
+    height: 100%;
+    width: 100%;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+}
+
+
+
+#header{
+    width: 100%;
+    text-align: center;
+    padding: 10px 20px 0px;
+    margin:0;
+    box-sizing:border-box;
+}
+
+    #header h1 {
+    margin: 5px 0 15px;
+    }
+
+    #header p {
+        margin: 0 0 5px;
+    }
+
+#camera{
+    position:relative;
+    display:flex;
+    flex-direction:column;
+    align-items:center;
+    width:100%;
+    gap: 10px;
+}
+
+
+#camera--view {
+    display:block;
+    transform:scaleX(-1);
+    margin:0px,10px,0px,10px;
+    aspect-ratio: 4/3;
+    object-fit:cover;
+    position:static;
+    flex:1;
+
+    
+}
+#camera--sensor
+{
+    display: none;
+}
+
+#camera--capture{
+    position:static;
+    
+    width: 100px;
+    height:50%;
+    padding: 15px;
+    
+    border:none;
+    border-radius:25px;
+    color:white;
+    background-color:black;
+    font-size: 16px;
+   
+
+    
+    text-align:center;
+    box-shadow: 0px 5px 10px rgba(0,0,0,0.5);
+    left:calc(50% - 100px);
+}
+
+#camera--output{
+    display: none;
+    width: 95%;
+    max-width: 800px;
+    height: auto;
+    
+}
+
+#camera--output.taken{
+    display:block
+
+}
