@@ -50,14 +50,17 @@ Configure it with:
 | `CLEF_ENDPOINT_URL` | URL of the Inference Endpoint |
 | `HF_TOKEN` | a Hugging Face token that can call the endpoint |
 | `SECRET_KEY` | random string that signs session cookies; required when Spotify is configured |
-| `SPOTIFY_CLIENT_ID`, `SPOTIFY_CLIENT_SECRET` | from the Spotify developer dashboard |
-| `SPOTIFY_REDIRECT_URI` | `https://<your host>/spotify/callback`, also registered in the dashboard |
+| `SPOTIFY_CLIENT_ID`, `SPOTIFY_CLIENT_SECRET` | from the Spotify developer dashboard; enough for song search |
+| `SPOTIFY_REDIRECT_URI` | `https://<your host>/spotify/callback`, also registered in the dashboard; needed for sign-in |
 
 Health checks can use `GET /healthz`. If the endpoint has scaled to zero, the first snapshot returns "the model is waking up" while it starts.
 
 ### Spotify
 
-Visiting `/spotify/login` signs the user in to Spotify (Authorization Code flow, with permission to create playlists), and `/api/spotify/status` reports whether they are connected. Tokens are kept in the signed session cookie and refreshed automatically; new routes can get a valid token from `spotify_access_token()`.
+- **Song search:** `POST /api/songs` with `{"genre": "Jazz"}` returns matching tracks (title, artists, album art, Spotify link and ID) from `spotify_service.py`. It uses the app's own credentials, so it only needs `SPOTIFY_CLIENT_ID` and `SPOTIFY_CLIENT_SECRET` and works without the user signing in.
+- **Sign-in:** visiting `/spotify/login` signs the user in to Spotify (Authorization Code flow, with permission to create playlists), and `/api/spotify/status` reports whether they are connected. This also needs `SPOTIFY_REDIRECT_URI` and `SECRET_KEY`. Tokens are kept in the signed session cookie and refreshed automatically; new routes can get a valid token from `spotify_access_token()`.
+
+For local runs, the variables can go in a `.env` file instead of the environment.
 
 ## How it works
 

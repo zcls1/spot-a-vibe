@@ -1,7 +1,8 @@
 """Flask server for spot-a-vibe.
 
-Serves the static app, exposes POST /api/genre for genre detection, and handles
-signing in with Spotify. Genre detection runs in one of three places:
+Serves the static app, exposes POST /api/genre for genre detection and
+POST /api/songs for Spotify songs that match a genre, and handles signing in with
+Spotify. Genre detection runs in one of three places:
 
   - a Hugging Face Inference Endpoint (CLEF_ENDPOINT_URL set): the snapshot is
     forwarded there, so this server needs no GPU or model dependencies
@@ -14,10 +15,11 @@ Environment variables:
   HF_TOKEN               Hugging Face token allowed to call that endpoint
   CLEF_STUB              set to 1 to skip the model and return random probabilities
   SECRET_KEY             signs the session cookie that holds Spotify tokens
-  SPOTIFY_CLIENT_ID      from the Spotify developer dashboard
-  SPOTIFY_CLIENT_SECRET
+  SPOTIFY_CLIENT_ID      from the Spotify developer dashboard; with the secret,
+  SPOTIFY_CLIENT_SECRET  enough for song search (POST /api/songs)
   SPOTIFY_REDIRECT_URI   must match a redirect URI registered in the dashboard,
-                         e.g. https://<host>/spotify/callback
+                         e.g. https://<host>/spotify/callback; needed for sign-in
+Variables can also be set in a .env file, which spotify_service loads on import.
 Local model runs also read CLEF_MODEL, CLEF_REVISION and CLEF_DEVICE (see
 endpoint/handler.py).
 """
@@ -35,6 +37,8 @@ from flask import Flask, abort, jsonify, redirect, request, send_from_directory,
 from PIL import Image, UnidentifiedImageError
 
 from endpoint.handler import GENRES
+# Imported before reading the environment below, since it loads .env.
+from spotify_service import TOKEN_URL, search_songs
 
 ENDPOINT_URL = os.environ.get("CLEF_ENDPOINT_URL")
 HF_TOKEN = os.environ.get("HF_TOKEN")
@@ -144,7 +148,7 @@ if spotify_configured() and not os.environ.get("SECRET_KEY"):
 
 def spotify_token_request(form):
     res = requests.post(
-        "https://accounts.spotify.com/api/token",
+        TOKEN_URL,
         data=form,
         auth=(SPOTIFY_CLIENT_ID, SPOTIFY_CLIENT_SECRET),
         timeout=10,
@@ -210,6 +214,23 @@ def spotify_callback():
 def spotify_logout():
     session.pop("spotify", None)
     return jsonify(connected=False)
+
+
+@app.post("/api/songs")
+def songs():
+    # Searching uses the app's own credentials (spotify_service), so it works
+    # without the user signing in.
+    genre = (request.get_json(silent=True) or {}).get("genre")
+    if genre not in GENRES:
+        return jsonify(error=f"genre must be one of {', '.join(GENRES)}"), 400
+    try:
+        return jsonify(genre=genre, songs=search_songs([genre]))
+    except RuntimeError:
+        # spotify_service raises this when the credentials are missing.
+        return jsonify(error="Spotify is not configured on this server"), 503
+    except requests.RequestException:
+        app.logger.exception("Spotify search failed")
+        return jsonify(error="Spotify search failed"), 502
 
 
 @app.get("/api/spotify/status")
