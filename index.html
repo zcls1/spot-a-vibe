@@ -43,10 +43,14 @@
       <div id="vibeResult" class="vibe-result" hidden>
         <p class="vibe-label">Your vibe is</p>
         <h2 id="vibeGenre" class="vibe-genre"></h2>
+        <p id="vibeSubgenre" class="vibe-subgenre" hidden></p>
         <p class="vibe-meta"><span id="vibeConfidence"></span> · <span id="vibeTime"></span></p>
         <details class="vibe-breakdown">
           <summary>Full breakdown</summary>
+          <h3 class="bars-title">Genre</h3>
           <ol id="vibeBars" class="vibe-bars" aria-label="Probability for each genre"></ol>
+          <h3 id="vibeSubBarsTitle" class="bars-title" hidden></h3>
+          <ol id="vibeSubBars" class="vibe-bars" aria-label="Probability for each style within the genre" hidden></ol>
         </details>
       </div>
 

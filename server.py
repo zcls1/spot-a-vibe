@@ -38,7 +38,7 @@ import requests
 from flask import Flask, abort, jsonify, redirect, request, send_from_directory, session
 from PIL import Image, UnidentifiedImageError
 
-from endpoint.handler import GENRES
+from endpoint.handler import GENRES, SUBGENRES
 # Imported before reading the environment below, since it loads .env.
 from spotify_service import TOKEN_URL, create_playlist, search_songs
 
@@ -70,19 +70,19 @@ class EndpointError(Exception):
         self.status = status
 
 
-def stub_answer():
-    weights = {genre: random.random() ** 3 for genre in GENRES}
+def stub_choice(options):
+    weights = {option: random.random() ** 3 for option in options}
     total = sum(weights.values())
-    probabilities = {genre: round(w / total, 4) for genre, w in weights.items()}
+    probabilities = {option: round(w / total, 4) for option, w in weights.items()}
     choice = max(probabilities, key=probabilities.get)
+    return {"type": "choice", "choice": choice, "confidence": probabilities[choice], "probabilities": probabilities}
+
+
+def stub_answer():
+    genre = stub_choice(GENRES)
     return {
         "model": "stub",
-        "answers": {"genre": {
-            "type": "choice",
-            "choice": choice,
-            "confidence": probabilities[choice],
-            "probabilities": probabilities,
-        }},
+        "answers": {"genre": genre, "subgenre": stub_choice(SUBGENRES[genre["choice"]])},
         "usage": {"input_tokens": 0, "output_tokens": 0},
     }
 
@@ -275,16 +275,17 @@ def spotify_genre_request(handler):
 @app.post("/api/playlist/songs")
 def playlist_songs():
     def find(token, genre, data):
-        # Clef's probability for each genre steers which artists are picked. Without
-        # them (or if they're malformed), fall back to the top genre alone.
-        probabilities = data.get("probabilities")
+        # Clef's probability for each of the genre's sub-genres steers which artists are
+        # picked. Without them (e.g. an endpoint still running the one-pass handler), or
+        # if they're malformed, every sub-genre counts equally.
+        probabilities = data.get("subgenres")
         if not (
             isinstance(probabilities, dict)
-            and set(probabilities) <= set(GENRES)
+            and set(probabilities) <= set(SUBGENRES[genre])
             and all(isinstance(p, (int, float)) and 0 <= p <= 1 for p in probabilities.values())
             and any(probabilities.values())
         ):
-            probabilities = {genre: 1.0}
+            probabilities = {subgenre: 1.0 for subgenre in SUBGENRES[genre]}
         songs = search_songs(token, genre, probabilities)
         if not songs:
             return jsonify(error=f"Spotify found no {genre} songs"), 404
@@ -302,7 +303,10 @@ def save_playlist():
             isinstance(uri, str) and TRACK_URI.fullmatch(uri) for uri in uris
         ):
             return jsonify(error="uris must be a list of 1 to 100 Spotify track URIs"), 400
-        return jsonify(genre=genre, playlist=create_playlist(token, genre, uris))
+        # Name the playlist after the sub-genre when the page knows it.
+        subgenre = data.get("subgenre")
+        name = subgenre if subgenre in SUBGENRES[genre] else genre
+        return jsonify(genre=genre, playlist=create_playlist(token, name, uris))
 
     return spotify_genre_request(save)
 

@@ -1,7 +1,7 @@
 # spot-a-vibe
 Knight Hacks IX
 
-Step in front of your laptop camera and spot-a-vibe guesses your music taste. When it sees someone, it counts down and snaps a photo (or press **Capture** to snap one right away), then asks [Cloudflare's Clef-Flash](https://huggingface.co/Cloudflare/clef-flash) model which genre fits their style. The result appears under the camera as "Your vibe is": the top genre, how confident the model is, and a ranked breakdown across all nine genres: Pop, Rock, Metal, Rap, R&B, Country, Electronic, EDM and Jazz. With Spotify connected, it also suggests songs for the vibe that can be saved as a playlist.
+Step in front of your laptop camera and spot-a-vibe guesses your music taste. When it sees someone, it counts down and snaps a photo (or press **Capture** to snap one right away), then asks [Cloudflare's Clef-Flash](https://huggingface.co/Cloudflare/clef-flash) model which genre fits their style, then asks it again which style of that genre fits best. The result appears under the camera as "Your vibe is": the top genre and sub-genre (e.g. Rap · Trap), how confident the model is, and a ranked breakdown across all nine genres (Pop, Rock, Metal, Rap, R&B, Country, Electronic, EDM and Jazz) and the five sub-genres of the top one. With Spotify connected, it also suggests songs for the vibe that can be saved as a playlist.
 
 Person detection runs entirely in the browser with [OpenCV.js](https://docs.opencv.org/4.9.0/opencv.js) and a MobileNet-SSD object detector. Only the snapshots are sent to the Flask server for genre detection.
 
@@ -35,7 +35,7 @@ The endpoint only needs the handler: when its repo doesn't contain the model, `h
    hf upload <you>/spot-a-vibe-clef endpoint/ .
    ```
 2. On [endpoints.huggingface.co](https://endpoints.huggingface.co), create an endpoint from that repo with a GPU that has at least 24 GB of memory; one with 48 GB (e.g. L40S) leaves headroom. Use the default container (it picks up `handler.py` and installs `requirements.txt`), leave it **Protected** so only your token can call it, and set min replicas to 0 (scale-to-zero) to save money between demos. The first start takes several minutes while it downloads the weights; the Logs tab shows progress.
-3. The endpoint takes an image body (`Content-Type: image/png` or `image/jpeg`) and returns the same response as `POST /api/genre`. To test it:
+3. The endpoint takes an image body (`Content-Type: image/png` or `image/jpeg`) and returns the same response as `POST /api/genre`, with both the genre and sub-genre answers. After changing `endpoint/handler.py`, upload it to the endpoint's repo again and restart the endpoint. To test it:
    ```sh
    curl -X POST "$CLEF_ENDPOINT_URL" -H "Authorization: Bearer $HF_TOKEN" \
      -H "Content-Type: image/jpeg" --data-binary @photo.jpg
@@ -76,8 +76,8 @@ Spotify needs an app registered once by the developer; people using the page the
 Connect a Spotify account with the **Connect Spotify** bar above the camera. Sign-in opens in a popup, so the camera and the current vibe stay put, and songs for that vibe load as soon as the popup closes. If the browser blocks popups, the page goes to Spotify itself instead; the current vibe is kept in `sessionStorage` and shown again on the way back, but the camera needs starting again. After that, every new vibe shows song cards (album art, title, artist, linking to Spotify) picked to match it, and **Save playlist to Spotify** saves them as a private playlist on that account. One account is connected at a time; **Disconnect** lets another one sign in.
 
 - **Sign-in:** `/spotify/login` signs the user in (Authorization Code flow, with permission to create playlists), and `/api/spotify/status` reports whether they are connected. With `?popup=1`, as the page uses it, the callback answers with a page that tells the opener it's done and closes, instead of redirecting to `/`. Tokens are kept in the signed session cookie and refreshed automatically.
-- **Songs:** `POST /api/playlist/songs` with `{"genre": "Rap", "probabilities": {...}}` (Clef's probability for each genre) picks songs by well-known artists, so they're recognisable; Spotify no longer tells apps how popular a song is. `genre_artists.py` lists about 15 artists per genre, each with how much of their sound belongs to each genre (Drake is 60% Rap, 30% R&B, 10% Pop). Each artist is scored by how well that matches the vibe, and 5 are drawn at random weighted by that score: a confident Rap vibe mostly picks pure rap artists, while a Rap/R&B split brings in artists who cross both. Each one contributes 2 songs from their top 5 search results. If an artist search comes up short, the rest is filled from the genre's top 50 search results (`genre:"rap"`).
-- **Saving:** `POST /api/playlist` with `{"genre": "Jazz", "uris": [...]}` saves exactly those tracks to a new playlist called "spot-a-vibe: Jazz" (`spotify_service.py`).
+- **Songs:** `POST /api/playlist/songs` with `{"genre": "Rap", "subgenres": {...}}` (Clef's probability for each of the genre's sub-genres) picks songs by well-known artists, so they're recognisable; Spotify no longer tells apps how popular a song is. `subgenre_artists.py` lists 5 artists per sub-genre. 5 artists are drawn at random, each weighted by their sub-genre's probability: with Trap at 0.8, about three quarters of the artists are trap artists, while a Trap/Pop Rap split mixes both. Each one contributes 2 songs from their top 5 search results. If an artist search comes up short, the rest is filled from the genre's top 50 search results (`genre:"rap"`). Without sub-genre probabilities (an endpoint still running the one-pass handler), every sub-genre counts equally.
+- **Saving:** `POST /api/playlist` with `{"genre": "Jazz", "subgenre": "Bebop", "uris": [...]}` saves exactly those tracks to a new playlist named after the sub-genre, e.g. "spot-a-vibe: Bebop" (or the genre, without one) (`spotify_service.py`).
 - **Development mode:** until the Spotify app has extended quota, it only works for up to 5 Spotify accounts on the app's allowlist (Developer Dashboard → your app → Settings → User Management), and the app owner needs Spotify Premium.
 
 For local runs, the variables can go in a `.env` file instead of the environment.
@@ -87,8 +87,22 @@ For local runs, the variables can go in a `.env` file instead of the environment
 ### Genre detection
 
 - Each snapshot is uploaded to `POST /api/genre`. The server checks it with Pillow and runs it through Clef-Flash (`endpoint/handler.py`, either locally or on the Inference Endpoint) as a Jev/SystemOne `choice` question over the 9 genres, asking it to judge only clothing and accessories.
-- The answer comes back with a probability for every genre. The result under the camera shows the top genre, its confidence and, under "Full breakdown", a ranked bar for each genre; each snapshot in the gallery is labelled with its genre too (hover for the full breakdown).
-- If Spotify is connected, song cards picked to match the newest result's genre probabilities follow, with a button to save them as a playlist (see [Spotify](#spotify)). **Scan again** runs the countdown for a fresh snapshot.
+- A second pass then asks a `choice` question over the top genre's 5 sub-genres (`SUBGENRES` in `endpoint/handler.py`), each described in a few words so the model knows the style. Both answers come back in one response, as `answers.genre` and `answers.subgenre`, so this doubles the model time per snapshot. The sub-genres were picked to differ in look as well as sound, since the model only sees the image:
+
+| Genre | Sub-genres |
+| --- | --- |
+| Pop | Dance Pop, Alt Pop, Singer-Songwriter Pop, K-Pop, Synth-pop |
+| Rock | Classic Rock, Punk, Grunge, Emo, Indie Rock |
+| Metal | Heavy Metal, Thrash Metal, Nu Metal, Glam Metal, Metalcore |
+| Rap | Trap, Conscious Hip Hop, Golden Age Hip Hop, Alternative Hip Hop, Pop Rap |
+| R&B | Contemporary R&B, Alternative R&B, Neo Soul, Classic Soul, 90s R&B |
+| Country | Classic Country, Contemporary Country, Country Pop, Outlaw & Americana, Bluegrass |
+| Electronic | French House, Trip Hop, Ambient & IDM, Synthwave, UK Garage |
+| EDM | Big Room House, Dubstep, Melodic Bass, Tech House, Trance |
+| Jazz | Bebop, Cool Jazz, Swing & Big Band, Jazz Fusion, Vocal Jazz |
+
+- Each answer comes back with a probability for every option. The result under the camera shows the top genre and sub-genre with their confidence and, under "Full breakdown", a ranked bar for each genre and for each sub-genre of the top one; each snapshot in the gallery is labelled with its genre and sub-genre too (hover for the full breakdown).
+- If Spotify is connected, song cards picked to match the newest result's sub-genre probabilities follow, with a button to save them as a playlist (see [Spotify](#spotify)). **Scan again** runs the countdown for a fresh snapshot.
 - Before a result, the same spot shows the current stage: waiting, countdown, "Reading the vibe…" while the model runs, then the result, or the error if the model fails. If several snapshots are in flight, only the newest result is shown.
 
 ### Spotting a person

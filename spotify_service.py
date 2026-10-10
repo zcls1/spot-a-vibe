@@ -10,8 +10,8 @@ import requests
 # Import the function that loads credentials from .env
 from dotenv import load_dotenv
 
-# Import the well-known artists to pick songs from, with their genres
-from genre_artists import ARTISTS
+# Import the well-known artists to pick songs from, grouped by sub-genre
+from subgenre_artists import SUBGENRE_ARTISTS
 
 # Load the private Spotify credentials from the .env file
 load_dotenv()
@@ -36,9 +36,11 @@ SONGS_PER_ARTIST = 2
 # usually their biggest songs, so picking the same artist twice gives some variety
 TOP_SONGS_PER_ARTIST = 5
 
-# How strongly to favour artists that match the vibe closely. 1 picks in direct
-# proportion to the match; higher values lean harder towards the best matches.
-SHARPNESS = 2
+# How strongly to favour the sub-genres Clef rates highest. 1 picks artists in direct
+# proportion to their sub-genre's probability; higher values lean harder towards the
+# top sub-genre. Each sub-genre only has 5 artists, so leaning too hard would give the
+# same 5 artists on every scan.
+SHARPNESS = 1
 
 # How many of the top genre search results to fill from if the artist searches come
 # up short. Deeper results are less popular, so this keeps the songs recognisable.
@@ -48,9 +50,9 @@ POOL_SIZE = 50
 PAGE_SIZE = 10
 
 
-def search_songs(token, genre, probabilities, limit=10):
-    # Choose artists whose genres match Clef's probabilities for this vibe
-    artists = pick_artists(probabilities, ARTISTS_PER_PLAYLIST)
+def search_songs(token, genre, subgenre_probabilities, limit=10):
+    # Choose artists from the genre's sub-genres, favouring the ones Clef rated highest
+    artists = pick_artists(genre, subgenre_probabilities, ARTISTS_PER_PLAYLIST)
 
     # Song titles already picked, so the same song never appears twice
     seen = set()
@@ -118,20 +120,18 @@ def search_songs(token, genre, probabilities, limit=10):
     ]
 
 
-def pick_artists(probabilities, count):
-    # Score each artist by how well their genres line up with the vibe: Clef's
-    # probability for each genre times the artist's weight in it, added up.
-    # Example: with Rap at 0.9, Kendrick Lamar ({"Rap": 1}) scores 0.9, while Drake
-    # ({"Rap": 0.6, "R&B": 0.3, ...}) scores about 0.55. If the vibe is split between
-    # Rap and R&B, Drake catches up, because he matches both.
-    scores = {
-        name: sum(probabilities.get(genre, 0) * weight for genre, weight in weights.items())
-        for name, weights in ARTISTS.items()
-    }
+def pick_artists(genre, subgenre_probabilities, count):
+    # Each artist is weighted by Clef's probability for their sub-genre.
+    # Example: for Rap with Trap at 0.6 and Pop Rap at 0.2, each Trap artist is three
+    # times as likely to be picked as each Pop Rap artist.
+    scores = {}
+    for subgenre, artists in SUBGENRE_ARTISTS[genre].items():
+        for name in artists:
+            scores[name] = max(scores.get(name, 0), subgenre_probabilities.get(subgenre, 0))
 
-    # Draw artists at random, weighted by their score (sharpened so close matches win
-    # more often), without picking anyone twice. Each artist gets a random key that
-    # tends to be larger the higher their weight; the largest keys win.
+    # Draw artists at random, weighted by their score, without picking anyone twice.
+    # Each artist gets a random key that tends to be larger the higher their weight;
+    # the largest keys win.
     keys = {
         name: random.random() ** (1 / score ** SHARPNESS)
         for name, score in scores.items()
@@ -197,7 +197,7 @@ def _search_tracks(token, query, limit, offset):
     return response.json()["tracks"]["items"]
 
 
-def create_playlist(token, genre, uris):
+def create_playlist(token, name, uris):
     # Include the signed-in user's access token in every request
     headers = {"Authorization": f"Bearer {token}"}
 
@@ -206,8 +206,8 @@ def create_playlist(token, genre, uris):
         CREATE_PLAYLIST_URL,
         headers=headers,
         json={
-            "name": f"spot-a-vibe: {genre}",
-            "description": f"{genre} songs picked by spot-a-vibe from your style.",
+            "name": f"spot-a-vibe: {name}",
+            "description": f"{name} songs picked by spot-a-vibe from your style.",
             "public": False,
         },
         timeout=15,

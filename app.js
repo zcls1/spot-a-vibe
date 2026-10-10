@@ -46,6 +46,9 @@ const els = {
   vibeGenre: $('vibeGenre'),
   vibeConfidence: $('vibeConfidence'),
   vibeBars: $('vibeBars'),
+  vibeSubgenre: $('vibeSubgenre'),
+  vibeSubBarsTitle: $('vibeSubBarsTitle'),
+  vibeSubBars: $('vibeSubBars'),
   scanAgain: $('scanAgain'),
   spotify: $('spotify'),
   spotifyAccount: $('spotifyAccount'),
@@ -62,10 +65,10 @@ let running = false;
 let frameStartedAt = 0;
 let countdownTimer = null;
 let latestGenreRequest = 0;  // ignore responses for snapshots older than the newest one
-let lastVibe = null;         // { answer, takenAt } of the most recent result
+let lastVibe = null;         // { answers, takenAt } of the most recent result
 let spotifyConfigured = false;
 let spotifyConnected = false;
-let pendingPlaylist = null;  // { genre, songs, requestId } shown in the card, ready to save
+let pendingPlaylist = null;  // { genre, subgenre, songs, requestId } shown in the card, ready to save
 
 const presence = {
   state: 'unknown',       // 'unknown' | 'present' | 'away'
@@ -197,7 +200,7 @@ function setPresence(state, since) {
     cancelCountdown();
     // Leaving mid-countdown: go back to whatever the card showed before.
     if (els.vibe.dataset.state === 'countdown') {
-      if (lastVibe) showVibeResult(lastVibe.answer, lastVibe.takenAt);
+      if (lastVibe) showVibeResult(lastVibe.answers, lastVibe.takenAt);
       else showVibeStatus('idle', 'Step in front of the camera, or press Capture.');
     }
   }
@@ -300,18 +303,20 @@ function addSnapshot(blob, takenAt) {
   showVibeStatus('loading', 'Reading the vibe…');
 
   classifyGenre(blob, stamp).then(
-    (answer) => {
+    (answers) => {
       if (requestId === latestGenreRequest) {
-        lastVibe = { answer, takenAt };
-        showVibeResult(answer, takenAt);
-        findSongs(answer, requestId);
+        lastVibe = { answers, takenAt };
+        showVibeResult(answers, takenAt);
+        findSongs(answers, requestId);
       }
-      genre.textContent = `${answer.choice} · ${Math.round(answer.confidence * 100)}%`;
-      genre.title = Object.entries(answer.probabilities)
-        .sort((a, b) => b[1] - a[1])
-        .map(([name, p]) => `${name}: ${Math.round(p * 100)}%`)
-        .join('\n');
-      addLogEntry(`Vibe: ${answer.choice}`, 'snap');
+      genre.textContent = vibeName(answers);
+      genre.title = [answers.genre, answers.subgenre].filter(Boolean)
+        .map((answer) => Object.entries(answer.probabilities)
+          .sort((a, b) => b[1] - a[1])
+          .map(([name, p]) => `${name}: ${Math.round(p * 100)}%`)
+          .join('\n'))
+        .join('\n\n');
+      addLogEntry(`Vibe: ${vibeName(answers)}`, 'snap');
     },
     (err) => {
       console.error('genre:', err);
@@ -335,18 +340,39 @@ function showVibeStatus(state, message) {
   els.scanAgain.hidden = true;
 }
 
-function showVibeResult(answer, takenAt) {
+// "Rap · Trap", or just "Rap" from an endpoint that only asks for the genre.
+function vibeName({ genre, subgenre }) {
+  return subgenre ? `${genre.choice} · ${subgenre.choice}` : genre.choice;
+}
+
+// answers.genre is the first pass; answers.subgenre, the style within that genre, is
+// the second pass and missing if the endpoint still runs the one-pass handler.
+function showVibeResult(answers, takenAt) {
+  const { genre, subgenre } = answers;
   els.vibe.dataset.state = 'result';
   els.vibeMessage.hidden = true;
   els.vibeResult.hidden = false;
   els.songs.hidden = !spotifyConfigured;
   els.scanAgain.hidden = !running;
-  els.vibeGenre.textContent = answer.choice;
-  els.vibeConfidence.textContent = `${Math.round(answer.confidence * 100)}% confident`;
+  els.vibeGenre.textContent = genre.choice;
+  els.vibeConfidence.textContent = `${Math.round(genre.confidence * 100)}% confident in ${genre.choice}`;
   els.vibeTime.textContent = `from ${takenAt.toLocaleTimeString()}`;
+  renderBars(els.vibeBars, genre);
 
+  els.vibeSubgenre.hidden = !subgenre;
+  els.vibeSubBarsTitle.hidden = !subgenre;
+  els.vibeSubBars.hidden = !subgenre;
+  if (subgenre) {
+    els.vibeSubgenre.textContent = `${subgenre.choice} · ${Math.round(subgenre.confidence * 100)}%`;
+    els.vibeSubBarsTitle.textContent = `Style of ${genre.choice}`;
+    renderBars(els.vibeSubBars, subgenre);
+  }
+}
+
+// One bar per option of a choice answer, highest first.
+function renderBars(list, answer) {
   const ranked = Object.entries(answer.probabilities).sort((a, b) => b[1] - a[1]);
-  els.vibeBars.replaceChildren(...ranked.map(([name, p]) => {
+  list.replaceChildren(...ranked.map(([name, p]) => {
     const li = document.createElement('li');
     if (name === answer.choice) li.className = 'top';
     const label = document.createElement('span');
@@ -393,10 +419,10 @@ async function initSpotify() {
     return;
   }
   // Only restore if nothing newer has been detected while the status was loading.
-  if (restored && !lastVibe) {
-    lastVibe = { answer: restored.answer, takenAt: new Date(restored.takenAt) };
-    showVibeResult(lastVibe.answer, lastVibe.takenAt);
-    findSongs(lastVibe.answer, latestGenreRequest);
+  if (restored?.answers && !lastVibe) {
+    lastVibe = { answers: restored.answers, takenAt: new Date(restored.takenAt) };
+    showVibeResult(lastVibe.answers, lastVibe.takenAt);
+    findSongs(lastVibe.answers, latestGenreRequest);
   }
 }
 
@@ -481,25 +507,27 @@ function songCard(song) {
 }
 
 // Only called for the newest snapshot; a newer one arriving mid-request wins. The
-// server picks artists by how well they match all of Clef's genre probabilities.
-async function findSongs(answer, requestId) {
+// server picks artists from the genre's sub-genres, favouring the ones Clef rated highest.
+async function findSongs(answers, requestId) {
   if (!spotifyConnected) return;
-  const genre = answer.choice;
+  const genre = answers.genre.choice;
+  const subgenre = answers.subgenre?.choice;
+  const label = subgenre || genre;
   pendingPlaylist = null;
   els.songList.hidden = true;
   els.spotifySave.hidden = true;
-  showSongsMessage('loading', `Finding ${genre} songs…`);
+  showSongsMessage('loading', `Finding ${label} songs…`);
   try {
     const { res, data } = await postSpotify('/api/playlist/songs', {
       genre,
-      probabilities: answer.probabilities,
+      subgenres: answers.subgenre?.probabilities,
     });
     if (requestId !== latestGenreRequest) return;
     if (res.status === 401) setSpotifyConnected(false);
     if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
 
-    pendingPlaylist = { genre, songs: data.songs, requestId };
-    showSongsMessage('idle', `${genre} songs for your vibe`);
+    pendingPlaylist = { genre, subgenre, songs: data.songs, requestId };
+    showSongsMessage('idle', `${label} songs for your vibe`);
     els.songList.replaceChildren(...data.songs.map(songCard));
     els.songList.hidden = false;
     els.spotifySave.disabled = false;
@@ -515,18 +543,18 @@ async function findSongs(answer, requestId) {
 // Saves exactly the songs on screen, so the playlist matches what was shown.
 async function savePlaylist() {
   if (!pendingPlaylist) return;
-  const { genre, songs, requestId } = pendingPlaylist;
+  const { genre, subgenre, songs, requestId } = pendingPlaylist;
   els.spotifySave.disabled = true;
-  showSongsMessage('loading', `Saving your ${genre} playlist…`);
+  showSongsMessage('loading', `Saving your ${subgenre || genre} playlist…`);
   try {
-    const { res, data } = await postSpotify('/api/playlist', { genre, uris: songs.map((s) => s.uri) });
+    const { res, data } = await postSpotify('/api/playlist', { genre, subgenre, uris: songs.map((s) => s.uri) });
     if (requestId !== latestGenreRequest) return;
     if (res.status === 401) setSpotifyConnected(false);
     if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
 
     els.spotifySave.hidden = true;
     showSongsMessage('done', `Saved “${data.playlist.name}” to your Spotify.`, data.playlist.spotify_url);
-    addLogEntry(`Playlist saved: ${genre}`, 'snap');
+    addLogEntry(`Playlist saved: ${subgenre || genre}`, 'snap');
   } catch (err) {
     console.error('playlist:', err);
     if (requestId === latestGenreRequest) {
@@ -549,7 +577,7 @@ els.spotifyConnect.addEventListener('click', (event) => {
   if (!lastVibe) return;
   try {
     sessionStorage.setItem(RESTORE_KEY, JSON.stringify({
-      answer: lastVibe.answer,
+      answers: lastVibe.answers,
       takenAt: lastVibe.takenAt.toISOString(),
     }));
   } catch {}
@@ -564,7 +592,7 @@ window.addEventListener('message', async (event) => {
     addLogEntry('Spotify connected', 'snap');
     // Skip while a newer snapshot is being read; its result fetches songs itself.
     if (lastVibe && els.vibe.dataset.state === 'result') {
-      findSongs(lastVibe.answer, latestGenreRequest);
+      findSongs(lastVibe.answers, latestGenreRequest);
     }
   } catch (err) {
     console.error('spotify:', err);
@@ -588,14 +616,15 @@ els.scanAgain.addEventListener('click', () => {
   startCountdown();
 });
 
-// Sends a snapshot to the Flask server, which runs it through Clef-Flash.
+// Sends a snapshot to the Flask server, which runs it through Clef-Flash twice: once for
+// the genre, then for the sub-genre within it. Returns { genre, subgenre } choice answers.
 async function classifyGenre(blob, stamp) {
   const form = new FormData();
   form.append('image', blob, `snapshot-${stamp}.png`);
   const res = await fetch('/api/genre', { method: 'POST', body: form });
   const body = await res.json().catch(() => ({}));
   if (!res.ok) throw new Error(body.error || `HTTP ${res.status}`);
-  return body.answers.genre;
+  return body.answers;
 }
 
 function drawOverlay(people) {

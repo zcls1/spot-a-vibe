@@ -243,6 +243,11 @@ button:disabled { opacity: 0.5; cursor: progress; }
   text-transform: uppercase;
   overflow-wrap: anywhere;
 }
+.vibe-subgenre {
+  margin: 0 0 10px;
+  font-size: clamp(20px, 4vw, 26px);
+  font-weight: bold;
+}
 .vibe-meta { margin: 0; color: var(--muted); font-size: 0.9rem; }
 
 .vibe-breakdown { margin: 16px auto 0; max-width: 420px; text-align: left; }
@@ -252,9 +257,17 @@ button:disabled { opacity: 0.5; cursor: progress; }
   text-align: center;
   cursor: pointer;
 }
+.bars-title {
+  margin: 16px 0 0;
+  color: var(--muted);
+  font-size: 0.8rem;
+  font-weight: normal;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+}
 .vibe-bars {
   list-style: none;
-  margin: 12px 0 0;
+  margin: 8px 0 0;
   padding: 0;
   display: grid;
   gap: 6px;
