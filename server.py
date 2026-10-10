@@ -1,105 +1,104 @@
 """Flask server for spot-a-vibe.
 
-Serves the static app and exposes POST /api/genre, which runs a snapshot through
-Cloudflare's Clef-Flash decision model and returns a Jev/SystemOne response body.
+Serves the static app, exposes POST /api/genre for genre detection, and handles
+signing in with Spotify. Genre detection runs in one of three places:
+
+  - a Hugging Face Inference Endpoint (CLEF_ENDPOINT_URL set): the snapshot is
+    forwarded there, so this server needs no GPU or model dependencies
+  - a stub (CLEF_STUB=1) that returns random probabilities, for working on the
+    front end
+  - otherwise locally, with endpoint/handler.py (needs endpoint/requirements.txt)
 
 Environment variables:
-  CLEF_MODEL   Hugging Face repo or local path (default: Cloudflare/clef-flash)
-  CLEF_DEVICE  cuda, mps or cpu (default: the first one available)
-  CLEF_STUB    set to 1 to skip loading the model and return random probabilities,
-               for working on the front end without a GPU
+  CLEF_ENDPOINT_URL      URL of the Inference Endpoint running endpoint/handler.py
+  HF_TOKEN               Hugging Face token allowed to call that endpoint
+  CLEF_STUB              set to 1 to skip the model and return random probabilities
+  SECRET_KEY             signs the session cookie that holds Spotify tokens
+  SPOTIFY_CLIENT_ID      from the Spotify developer dashboard
+  SPOTIFY_CLIENT_SECRET
+  SPOTIFY_REDIRECT_URI   must match a redirect URI registered in the dashboard,
+                         e.g. https://<host>/spotify/callback
+Local model runs also read CLEF_MODEL, CLEF_REVISION and CLEF_DEVICE (see
+endpoint/handler.py).
 """
 
+import io
+import logging
 import os
 import random
-import sys
-import threading
+import secrets
+import time
+from urllib.parse import urlencode
 
-from flask import Flask, jsonify, request, send_from_directory
+import requests
+from flask import Flask, abort, jsonify, redirect, request, send_from_directory, session
 from PIL import Image, UnidentifiedImageError
 
-MODEL_ID = os.environ.get("CLEF_MODEL", "Cloudflare/clef-flash")
+from endpoint.handler import GENRES
+
+ENDPOINT_URL = os.environ.get("CLEF_ENDPOINT_URL")
+HF_TOKEN = os.environ.get("HF_TOKEN")
 STUB = os.environ.get("CLEF_STUB") == "1"
 
-GENRES = ["Pop", "Rock", "Metal", "Rap", "R&B", "Country", "Electronic", "EDM", "Jazz"]
-
-GENRE_QUESTION = {
-    "type": "choice",
-    "instructions": (
-        "Determine the preferred genre of the person in this image based off of their general "
-        "aesthetic (clothes, accessories). Do not take characteristics like height, race or "
-        "weight into consideration."
-    ),
-    # A choice question maps each option ID to a description of that option.
-    "criteria": {genre: f"The person's aesthetic suggests they prefer {genre} music." for genre in GENRES},
-}
+SPOTIFY_CLIENT_ID = os.environ.get("SPOTIFY_CLIENT_ID")
+SPOTIFY_CLIENT_SECRET = os.environ.get("SPOTIFY_CLIENT_SECRET")
+SPOTIFY_REDIRECT_URI = os.environ.get("SPOTIFY_REDIRECT_URI")
+SPOTIFY_SCOPES = "playlist-modify-private playlist-modify-public"
 
 app = Flask(__name__, static_folder=None)
+app.logger.setLevel(logging.INFO)
+# Snapshots are full-resolution frames; a few MB is plenty.
+app.config["MAX_CONTENT_LENGTH"] = 10 * 1024 * 1024
+# A random key works for one process, but gunicorn workers each need the same key.
+app.secret_key = os.environ.get("SECRET_KEY") or secrets.token_hex(32)
 ROOT = os.path.dirname(os.path.abspath(__file__))
 
-model = processor = systemone = None
-# The model runs on a single device; serialise requests so they don't contend for it.
-inference_lock = threading.Lock()
+local_model = None
 
 
-def pick_device():
-    import torch
+class EndpointError(Exception):
+    """A genre detection failure whose message is safe to show on the page."""
 
-    if os.environ.get("CLEF_DEVICE"):
-        return os.environ["CLEF_DEVICE"]
-    if torch.cuda.is_available():
-        return "cuda"
-    if torch.backends.mps.is_available():
-        return "mps"
-    return "cpu"
+    def __init__(self, message, status=502):
+        super().__init__(message)
+        self.status = status
 
 
-def load_model():
-    global model, processor, systemone
-    from huggingface_hub import snapshot_download
-
-    path = snapshot_download(MODEL_ID)
-    # joint_schema_model.py ships inside the model repo rather than as a package.
-    sys.path.insert(0, path)
-    from joint_schema_model import load_release_model
-    from joint_schema_model import systemone as _systemone
-
-    device = pick_device()
-    print(f"Loading {MODEL_ID} on {device}…", flush=True)
-    model, processor = load_release_model(path, device=device)
-    systemone = _systemone
-
-    # The first forward pass is much slower (on an M3 Max, ~28 s vs ~2 s after) while
-    # the GPU compiles kernels. Do it now so the first real snapshot isn't stuck.
-    print("Warming up the model…", flush=True)
-    classify(Image.new("RGB", (640, 480), "gray"))
-    print("Model ready.", flush=True)
-
-
-def classify(image):
-    body = {
-        "model": MODEL_ID,
-        "state": {"task": "Review the given image"},
-        "images": [image],
-        "questions": {"genre": GENRE_QUESTION},
+def stub_answer():
+    weights = {genre: random.random() ** 3 for genre in GENRES}
+    total = sum(weights.values())
+    probabilities = {genre: round(w / total, 4) for genre, w in weights.items()}
+    choice = max(probabilities, key=probabilities.get)
+    return {
+        "model": "stub",
+        "answers": {"genre": {
+            "type": "choice",
+            "choice": choice,
+            "confidence": probabilities[choice],
+            "probabilities": probabilities,
+        }},
+        "usage": {"input_tokens": 0, "output_tokens": 0},
     }
-    if STUB:
-        weights = {genre: random.random() ** 3 for genre in GENRES}
-        total = sum(weights.values())
-        probabilities = {genre: round(w / total, 4) for genre, w in weights.items()}
-        choice = max(probabilities, key=probabilities.get)
-        return {
-            "model": "stub",
-            "answers": {"genre": {
-                "type": "choice",
-                "choice": choice,
-                "confidence": probabilities[choice],
-                "probabilities": probabilities,
-            }},
-            "usage": {"input_tokens": 0, "output_tokens": 0},
-        }
-    with inference_lock:
-        return systemone(model, processor, body)
+
+
+def classify_remote(data, content_type):
+    try:
+        res = requests.post(
+            ENDPOINT_URL,
+            data=data,
+            headers={"Content-Type": content_type, **({"Authorization": f"Bearer {HF_TOKEN}"} if HF_TOKEN else {})},
+            timeout=120,
+        )
+    except requests.RequestException:
+        app.logger.exception("could not reach the inference endpoint")
+        raise EndpointError("could not reach the model")
+    # A scaled-to-zero endpoint answers 503 while it starts up and loads the weights.
+    if res.status_code == 503:
+        raise EndpointError("the model is waking up, try again in a minute", status=503)
+    if not res.ok:
+        app.logger.error("inference endpoint returned %s: %s", res.status_code, res.text[:500])
+        raise EndpointError("the model failed to read this snapshot")
+    return res.json()
 
 
 @app.post("/api/genre")
@@ -107,18 +106,123 @@ def genre():
     upload = request.files.get("image")
     if upload is None:
         return jsonify(error="expected an image file in the 'image' form field"), 400
+    data = upload.read()
     try:
-        # Decode the uploaded snapshot with Pillow. convert() forces the full decode
-        # while the upload stream is still open and drops any alpha channel.
-        image = Image.open(upload.stream).convert("RGB")
+        # Decode the snapshot with Pillow, both to reject anything that isn't an image and
+        # to get an RGB copy for the local model. convert() forces the full decode.
+        image = Image.open(io.BytesIO(data))
+        content_type = Image.MIME.get(image.format, "image/png")
+        image = image.convert("RGB")
     except UnidentifiedImageError:
         return jsonify(error="could not read the uploaded image"), 400
     try:
-        return jsonify(classify(image))
-    except Exception as err:
-        # Surface model failures (e.g. an unsupported op on the chosen device) to the page.
+        if STUB:
+            return jsonify(stub_answer())
+        if ENDPOINT_URL:
+            return jsonify(classify_remote(data, content_type))
+        return jsonify(local_model.classify(image))
+    except EndpointError as err:
+        return jsonify(error=str(err)), err.status
+    except Exception:
         app.logger.exception("genre classification failed")
-        return jsonify(error=f"model error: {err}"), 500
+        return jsonify(error="the model failed to read this snapshot"), 500
+
+
+# --- Spotify ------------------------------------------------------------------
+# Authorization Code flow: /spotify/login sends the user to Spotify, which sends them
+# back to /spotify/callback with a code that we exchange for tokens. The tokens live
+# in the signed session cookie, so there is no database.
+
+
+def spotify_configured():
+    return all([SPOTIFY_CLIENT_ID, SPOTIFY_CLIENT_SECRET, SPOTIFY_REDIRECT_URI])
+
+
+if spotify_configured() and not os.environ.get("SECRET_KEY"):
+    raise RuntimeError("set SECRET_KEY so Spotify sessions survive restarts and work across workers")
+
+
+def spotify_token_request(form):
+    res = requests.post(
+        "https://accounts.spotify.com/api/token",
+        data=form,
+        auth=(SPOTIFY_CLIENT_ID, SPOTIFY_CLIENT_SECRET),
+        timeout=10,
+    )
+    res.raise_for_status()
+    tokens = res.json()
+    session["spotify"] = {
+        "access_token": tokens["access_token"],
+        # Spotify only sometimes sends a new refresh token; keep the old one otherwise.
+        "refresh_token": tokens.get("refresh_token") or session.get("spotify", {}).get("refresh_token"),
+        "expires_at": time.time() + tokens["expires_in"] - 60,
+    }
+
+
+def spotify_access_token():
+    """The signed-in user's access token, refreshed if it has expired, or None."""
+    tokens = session.get("spotify")
+    if not tokens:
+        return None
+    if time.time() >= tokens["expires_at"]:
+        try:
+            spotify_token_request({"grant_type": "refresh_token", "refresh_token": tokens["refresh_token"]})
+        except requests.RequestException:
+            app.logger.exception("could not refresh the Spotify token")
+            session.pop("spotify", None)
+            return None
+    return session["spotify"]["access_token"]
+
+
+@app.get("/spotify/login")
+def spotify_login():
+    if not spotify_configured():
+        return jsonify(error="Spotify is not configured on this server"), 503
+    session["spotify_state"] = secrets.token_urlsafe(16)
+    return redirect("https://accounts.spotify.com/authorize?" + urlencode({
+        "response_type": "code",
+        "client_id": SPOTIFY_CLIENT_ID,
+        "scope": SPOTIFY_SCOPES,
+        "redirect_uri": SPOTIFY_REDIRECT_URI,
+        "state": session["spotify_state"],
+    }))
+
+
+@app.get("/spotify/callback")
+def spotify_callback():
+    # The state check stops another site from signing the user in to its own account.
+    if not request.args.get("state") or request.args.get("state") != session.pop("spotify_state", None):
+        abort(400)
+    if "code" in request.args:
+        try:
+            spotify_token_request({
+                "grant_type": "authorization_code",
+                "code": request.args["code"],
+                "redirect_uri": SPOTIFY_REDIRECT_URI,
+            })
+        except requests.RequestException:
+            app.logger.exception("Spotify token exchange failed")
+    # If the user declined, Spotify sends ?error=access_denied; they just stay signed out.
+    return redirect("/")
+
+
+@app.post("/spotify/logout")
+def spotify_logout():
+    session.pop("spotify", None)
+    return jsonify(connected=False)
+
+
+@app.get("/api/spotify/status")
+def spotify_status():
+    return jsonify(configured=spotify_configured(), connected=spotify_access_token() is not None)
+
+
+# --- Static files and health ----------------------------------------------------
+
+
+@app.get("/healthz")
+def healthz():
+    return jsonify(ok=True)
 
 
 # Only the front end is served, not server.py or anything else in the repo.
@@ -137,8 +241,10 @@ def static_files(filename):
     return jsonify(error="not found"), 404
 
 
-if not STUB:
-    load_model()
+if not STUB and not ENDPOINT_URL:
+    from endpoint.handler import EndpointHandler
+
+    local_model = EndpointHandler()
 
 if __name__ == "__main__":
     app.run(host="127.0.0.1", port=int(os.environ.get("PORT", 8000)), debug=False)

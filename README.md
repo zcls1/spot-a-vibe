@@ -5,7 +5,7 @@ Step in front of your laptop camera and spot-a-vibe guesses your music taste. Wh
 
 The result appears under the camera feed as a "Detected vibe": the top genre, how confident the model is, and a ranked breakdown across all nine genres: Pop, Rock, Metal, Rap, R&B, Country, Electronic, EDM and Jazz.
 
-Person detection runs entirely in the browser with [OpenCV.js](https://docs.opencv.org/4.9.0/opencv.js) and a MobileNet-SSD object detector. Only the snapshots are sent to the local Flask server for genre detection.
+Person detection runs entirely in the browser with [OpenCV.js](https://docs.opencv.org/4.9.0/opencv.js) and a MobileNet-SSD object detector. Only the snapshots are sent to the Flask server for genre detection.
 
 ## Run
 
@@ -14,21 +14,56 @@ The Flask server serves the page and runs genre detection with [Clef-Flash](http
 ```sh
 python3 -m venv .venv
 source .venv/bin/activate
-pip install -r requirements.txt
+pip install -r requirements.txt -r endpoint/requirements.txt
 python server.py            # serves http://127.0.0.1:8000
 ```
 
 The first run downloads the model (~19 GB). Startup then takes about a minute: loading the weights, plus one warm-up pass so the first snapshot isn't slow. On an M3 Max each snapshot takes about 2 seconds after that. The device is picked automatically (CUDA, then Apple GPU, then CPU); override it with `CLEF_DEVICE`.
 
-To work on the front end without the model, `CLEF_STUB=1 python server.py` skips it and returns random genre probabilities.
+To work on the front end without the model, `CLEF_STUB=1 python server.py` skips it and returns random genre probabilities. That only needs `requirements.txt`.
 
 Camera access requires a secure context, so open the page via `localhost` or HTTPS, not `file://`.
+
+## Deploy
+
+The deployment has two parts: the model runs on a GPU [Hugging Face Inference Endpoint](https://huggingface.co/docs/inference-endpoints), and the web server (a small CPU container) serves the page and forwards snapshots to it. Keeping the two apart means changes to the web server never require rebuilding or restarting the GPU.
+
+### Model endpoint
+
+1. Duplicate [`Cloudflare/clef-flash`](https://huggingface.co/Cloudflare/clef-flash) (Apache-2.0) into your account, then add `endpoint/handler.py` and `endpoint/requirements.txt` to the root of your copy.
+2. Create an Inference Endpoint from your copy with a GPU that has at least 24 GB of memory; one with 48 GB (e.g. L40S) leaves headroom. Leave it protected so only your token can call it, and enable scale-to-zero to save money between demos.
+3. The endpoint takes an image body (`Content-Type: image/png` or `image/jpeg`) and returns the same response as `POST /api/genre`.
+
+### Web server
+
+The `Dockerfile` builds the web server only, with no model dependencies, so it runs on any container host or VM without a GPU. It listens on `$PORT` (default 8000). Serve it over HTTPS at a stable URL: the camera only works in a secure context, and Spotify redirects back to a fixed address. Most hosts provide both; on a plain VM, put a reverse proxy such as Caddy or nginx in front.
+
+```sh
+docker build -t spot-a-vibe .
+docker run -p 8000:8000 --env-file .env spot-a-vibe
+```
+
+Configure it with:
+
+| Variable | |
+| --- | --- |
+| `CLEF_ENDPOINT_URL` | URL of the Inference Endpoint |
+| `HF_TOKEN` | a Hugging Face token that can call the endpoint |
+| `SECRET_KEY` | random string that signs session cookies; required when Spotify is configured |
+| `SPOTIFY_CLIENT_ID`, `SPOTIFY_CLIENT_SECRET` | from the Spotify developer dashboard |
+| `SPOTIFY_REDIRECT_URI` | `https://<your host>/spotify/callback`, also registered in the dashboard |
+
+Health checks can use `GET /healthz`. If the endpoint has scaled to zero, the first snapshot returns "the model is waking up" while it starts.
+
+### Spotify
+
+Visiting `/spotify/login` signs the user in to Spotify (Authorization Code flow, with permission to create playlists), and `/api/spotify/status` reports whether they are connected. Tokens are kept in the signed session cookie and refreshed automatically; new routes can get a valid token from `spotify_access_token()`.
 
 ## How it works
 
 ### Genre detection
 
-- Each snapshot is uploaded to `POST /api/genre`. The server opens it with Pillow and sends it to Clef-Flash as a Jev/SystemOne `choice` question over the 9 genres, asking it to judge only clothing and accessories.
+- Each snapshot is uploaded to `POST /api/genre`. The server checks it with Pillow and runs it through Clef-Flash (`endpoint/handler.py`, either locally or on the Inference Endpoint) as a Jev/SystemOne `choice` question over the 9 genres, asking it to judge only clothing and accessories.
 - The answer comes back with a probability for every genre. The "Detected vibe" card under the camera shows the top genre, its confidence and a ranked bar for each genre; each snapshot in the gallery is labelled with its genre too (hover for the full breakdown).
 - The card shows the current stage: waiting, countdown, "Reading the vibe…" while the model runs, then the result, or the error if the model fails. If several snapshots are in flight, only the newest result is shown.
 
