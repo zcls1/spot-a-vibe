@@ -6,7 +6,9 @@ body{
     display: flex;
     flex-direction: column;
     align-items: center;
-    background-color:rgb(5, 150, 68);
+    background-color:#121212;
+    color: #1ed760;
+    font-family: Arial, sans-serif;
 }
 
 
@@ -17,12 +19,14 @@ body{
     padding: 10px 20px 0px;
     margin:0;
     box-sizing:border-box;
+    
     /*Change font*/
     
 }
 
     #header h1 {
     margin: 5px 0 15px;
+    color:white;
     }
 
     #header p {
@@ -49,6 +53,7 @@ body{
     border-radius: 12px;
     margin: 0 auto;
     box-sizing: border-box;
+    
    
 }
 
@@ -83,15 +88,20 @@ body{
     
     border:none;
     border-radius:25px;
-    color:white;
-    background-color:black;
+    color: #121212;
+    background-color: #1ed760;
     font-size: 16px;
-   
+   font-weight: bold;
+    cursor: pointer;
 
     
     text-align:center;
     box-shadow: 0px 5px 10px rgba(0,0,0,0.5);
     left:calc(50% - 100px);
+}
+
+#camera--capture:hover{
+      background-color: #1ed760;
 }
 
 #camera--output{

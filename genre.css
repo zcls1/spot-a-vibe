@@ -1,0 +1,109 @@
+body {
+    margin: 0;
+    min-height: 100vh;
+    background-color: #121212;
+    color: white;
+    font-family: Arial, sans-serif;
+}
+
+#header {
+    text-align: center;
+    padding: 20px;
+}
+
+#header h1{
+    margin: 0;
+
+}
+
+#genre--page{
+     width: 90%;
+    max-width: 650px;
+    margin: 30px auto;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 30px;
+}
+
+#genre--result {
+    text-align: center;
+}
+
+#result--label {
+    color: #B3B3B3;
+    letter-spacing: 3px;
+    font-size: 14px;
+}
+
+#genre--name {
+    color: #1DB954;
+    font-size: clamp(36px, 8vw, 56px);
+    margin: 10px 0;
+    text-transform: uppercase;
+}
+
+#genre--description {
+    color: #CCCCCC;
+}
+
+#song--card {
+    display: flex;
+    align-items: center;
+    gap: 20px;
+    width: 100%;
+    padding: 20px;
+    box-sizing: border-box;
+    background-color: #202020;
+    border-radius: 15px;
+}
+
+
+/*
+#song--cover {
+    width: 140px;
+    aspect-ratio: 1 / 1;
+    object-fit: cover;
+    border-radius: 8px;
+}
+
+*/
+
+#song--info {
+    min-width: 0;
+}
+
+#song--title {
+    margin: 0 0 8px;
+    overflow-wrap: anywhere;
+}
+
+#song--artist {
+    color: #B3B3B3;
+}
+
+#scan--again {
+    padding: 15px 30px;
+    border: none;
+    border-radius: 30px;
+    background-color: #1DB954;
+    color: #121212;
+    font-size: 16px;
+    font-weight: bold;
+    cursor: pointer;
+}
+
+#scan--again:hover {
+   color:white;
+}
+
+
+@media (max-width: 450px) {
+    #song--card {
+        gap: 12px;
+        padding: 12px;
+    }
+    #song--cover {
+        width: 100px;
+    }
+}
