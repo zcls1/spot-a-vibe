@@ -1,4 +1,4 @@
-# Import tools for reading credentials and sending API requests
+# These imports tools for reading credentials and sending API requests
 import os
 import requests
 import json
@@ -19,7 +19,7 @@ MODEL_URL = (
 
 
 def get_music_tags(vibe):
-    # Make sure Cloudflare credentials are available
+    # This will make sure Cloudflare credentials are available
     if not ACCOUNT_ID or not API_TOKEN:
         raise RuntimeError("Cloudflare credentials are missing.")
 
@@ -59,7 +59,7 @@ def get_music_tags(vibe):
     # Try to read tags from the parsed response
     tags = result.get("response", {}).get("music_tags")
 
-    # If needed, parse the AI's JSON text
+    # If needed, analyze the AI's JSON text
     if not tags:
         content = result["choices"][0]["message"]["content"]
         tags = json.loads(content).get("music_tags")
@@ -68,5 +68,5 @@ def get_music_tags(vibe):
     if not isinstance(tags, list) or not tags:
         raise ValueError("AI did not return valid music tags.")
 
-    # Return the tags so Spotify can search for songs
+    # Lastly, return the tags so Spotify can search for songs
     return tags
