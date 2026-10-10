@@ -22,9 +22,12 @@ CREATE_PLAYLIST_URL = "https://api.spotify.com/v1/me/playlists"
 # Spotify's URL for adding songs to a playlist
 PLAYLIST_ITEMS_URL = "https://api.spotify.com/v1/playlists/{playlist_id}/items"
 
-# How far into the search results the random starting point can be. Deeper results are
-# less popular, so this keeps the songs recognisable while still varying them.
-MAX_RANDOM_OFFSET = 100
+# How many of the top search results to pick songs from. Deeper results are less
+# popular, so this keeps the songs recognisable while still varying them.
+POOL_SIZE = 50
+
+# The most tracks Spotify returns per search, so the pool is fetched in pages of this size
+PAGE_SIZE = 10
 
 
 def search_songs(token, genre, limit=10):
@@ -33,12 +36,25 @@ def search_songs(token, genre, limit=10):
     # Example: "R&B" becomes genre:"r&b"
     query = f'genre:"{genre.lower()}"'
 
-    # Start at a random point in the results so the same genre gives different songs
-    tracks = _search_tracks(token, query, limit, random.randint(0, MAX_RANDOM_OFFSET))
+    # Collect the top results for the genre, one page at a time
+    pool = []
+    for offset in range(0, POOL_SIZE, PAGE_SIZE):
+        page = _search_tracks(token, query, PAGE_SIZE, offset)
+        pool.extend(page)
 
-    # A genre with fewer results than the starting point returns nothing; start from the top
-    if not tracks:
-        tracks = _search_tracks(token, query, limit, 0)
+        # A short page means there are no more results
+        if len(page) < PAGE_SIZE:
+            break
+
+    # The same song often appears more than once (e.g. on a single and on an album),
+    # so keep only the first, highest-ranked copy of each title by the same artists
+    unique = {}
+    for track in pool:
+        key = (track["name"].lower(), tuple(artist["id"] for artist in track["artists"]))
+        unique.setdefault(key, track)
+
+    # Pick random songs from the pool so the same genre gives different songs each time
+    tracks = random.sample(list(unique.values()), min(limit, len(unique)))
 
     # Build a simpler list containing only the information we need
     return [

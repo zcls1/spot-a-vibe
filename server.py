@@ -185,6 +185,8 @@ def spotify_login():
     if not spotify_configured():
         return jsonify(error="Spotify is not configured on this server"), 503
     session["spotify_state"] = secrets.token_urlsafe(16)
+    # The page opens sign-in in a popup so the camera keeps running; see spotify_callback.
+    session["spotify_popup"] = request.args.get("popup") == "1"
     return redirect("https://accounts.spotify.com/authorize?" + urlencode({
         "response_type": "code",
         "client_id": SPOTIFY_CLIENT_ID,
@@ -211,7 +213,26 @@ def spotify_callback():
         except requests.RequestException:
             app.logger.exception("Spotify token exchange failed")
     # If the user declined, Spotify sends ?error=access_denied; they just stay signed out.
+    if session.pop("spotify_popup", False):
+        return SPOTIFY_POPUP_DONE
     return redirect("/")
+
+
+# Returned to the sign-in popup: tells the page that opened it to re-check its Spotify
+# status, then closes. The message carries no data, so the page trusts only the server.
+SPOTIFY_POPUP_DONE = """<!doctype html>
+<meta charset="utf-8">
+<title>spot-a-vibe</title>
+<p>You can close this window and go back to spot-a-vibe.</p>
+<script>
+  if (window.opener) {
+    window.opener.postMessage("spotify-sign-in-done", location.origin);
+    window.close();
+  } else {
+    location.replace("/");
+  }
+</script>
+"""
 
 
 @app.post("/spotify/logout")

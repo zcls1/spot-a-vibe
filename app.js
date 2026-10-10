@@ -381,11 +381,15 @@ async function initSpotify() {
   try {
     const res = await fetch('/api/spotify/status');
     const status = await res.json();
-    if (!status.configured) return;
+    if (!status.configured) {
+      showSpotifyUnavailable('Spotify isn’t set up on this server, so songs and playlists are off.');
+      return;
+    }
     spotifyConfigured = true;
     setSpotifyConnected(status.connected);
   } catch (err) {
     console.error('spotify:', err);
+    showSpotifyUnavailable('Couldn’t reach the server to check Spotify.');
     return;
   }
   // Only restore if nothing newer has been detected while the status was loading.
@@ -394,6 +398,14 @@ async function initSpotify() {
     showVibeResult(lastVibe.answer, lastVibe.takenAt);
     findSongs(lastVibe.answer.choice, latestGenreRequest);
   }
+}
+
+// Shown instead of the Connect button, so a missing setup isn't mistaken for a missing feature.
+function showSpotifyUnavailable(text) {
+  els.spotify.hidden = false;
+  els.spotifyConnect.hidden = true;
+  els.spotifyDisconnect.hidden = true;
+  els.spotifyAccount.textContent = text;
 }
 
 function setSpotifyConnected(connected) {
@@ -520,7 +532,15 @@ async function savePlaylist() {
 }
 
 els.spotifySave.addEventListener('click', savePlaylist);
-els.spotifyConnect.addEventListener('click', () => {
+// Sign-in opens in a popup, so the camera and the current vibe stay put. If the browser
+// blocks it, the link navigates as usual and the vibe is restored on the way back.
+els.spotifyConnect.addEventListener('click', (event) => {
+  const popup = window.open('/spotify/login?popup=1', 'spotify-sign-in', 'popup,width=500,height=760');
+  if (popup) {
+    event.preventDefault();
+    popup.focus();
+    return;
+  }
   if (!lastVibe) return;
   try {
     sessionStorage.setItem(RESTORE_KEY, JSON.stringify({
@@ -528,6 +548,22 @@ els.spotifyConnect.addEventListener('click', () => {
       takenAt: lastVibe.takenAt.toISOString(),
     }));
   } catch {}
+});
+// The popup's last page posts this once the server has (or hasn't) stored the tokens.
+window.addEventListener('message', async (event) => {
+  if (event.origin !== location.origin || event.data !== 'spotify-sign-in-done') return;
+  try {
+    const status = await (await fetch('/api/spotify/status')).json();
+    if (!status.connected) return;
+    setSpotifyConnected(true);
+    addLogEntry('Spotify connected', 'snap');
+    // Skip while a newer snapshot is being read; its result fetches songs itself.
+    if (lastVibe && els.vibe.dataset.state === 'result') {
+      findSongs(lastVibe.answer.choice, latestGenreRequest);
+    }
+  } catch (err) {
+    console.error('spotify:', err);
+  }
 });
 els.spotifyDisconnect.addEventListener('click', async () => {
   await fetch('/spotify/logout', { method: 'POST' }).catch(() => {});
