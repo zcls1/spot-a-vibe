@@ -71,6 +71,90 @@ button:disabled { opacity: 0.5; cursor: progress; }
 }
 .link-button:hover { color: var(--text); }
 
+/* --- Welcome screen (the Frontend branch's homepage) ------------------------------- */
+
+.welcome .header h1 { font-size: clamp(2rem, 6vw, 2.5rem); }
+
+/* Room at the bottom so the fixed Start Here bar never covers the last step. */
+.welcome-main {
+  max-width: 900px;
+  padding-bottom: 120px;
+  gap: 8px;
+}
+
+.welcome-section h2 {
+  margin: 20px 0 16px;
+  padding-bottom: 10px;
+  border-bottom: 2px solid var(--green-bright);
+  color: var(--green-bright);
+  font-size: clamp(32px, 7vw, 50px);
+}
+.welcome-section p { margin: 0; font-size: clamp(17px, 2.4vw, 22px); line-height: 1.5; }
+
+.steps {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+.step {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+}
+.step-info { flex: 1; min-width: 0; align-self: flex-start; }
+.step-info h3 { margin: 0 0 6px; font-size: clamp(26px, 5vw, 36px); }
+
+/* A slot for a photo of the step; until there is one, a numbered tile. */
+.step-photo {
+  flex: none;
+  width: min(40%, 300px);
+  aspect-ratio: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 15px;
+  background: var(--panel);
+  color: var(--green);
+  font-size: clamp(48px, 10vw, 96px);
+  font-weight: bold;
+}
+img.step-photo { object-fit: cover; }
+
+@media (max-width: 560px) {
+  .step { flex-direction: column; align-items: stretch; }
+  .step-photo { width: 100%; max-height: 160px; aspect-ratio: auto; }
+}
+
+.start-bar {
+  position: fixed;
+  left: 50%;
+  bottom: 10px;
+  transform: translateX(-50%);
+  width: calc(100% - 20px);
+  max-width: 1200px;
+  height: 72px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 10px;
+  background-image: linear-gradient(to right, #00fa92, #00e5fa, #0068fa);
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.5);
+}
+.start-here {
+  padding: 12px 32px;
+  border: 0;
+  border-radius: 25px;
+  background: #fff;
+  color: #000;
+  font-size: 16px;
+  font-weight: bold;
+  transition: transform 0.15s;
+}
+.start-here:hover { transform: scale(1.05); }
+
 /* --- Spotify account ----------------------------------------------------------- */
 
 .spotify-bar {
@@ -201,7 +285,9 @@ button:disabled { opacity: 0.5; cursor: progress; }
 
 .capture { min-width: 140px; }
 
-/* --- Vibe result (the Frontend branch's genre page) ------------------------------ */
+/* --- Vibe screen (the Frontend branch's genre page) ------------------------------ */
+
+.result-main { align-items: center; text-align: center; gap: 30px; }
 
 .vibe {
   display: flex;

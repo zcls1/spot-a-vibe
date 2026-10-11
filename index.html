@@ -8,39 +8,152 @@
   <link rel="stylesheet" href="style.css" />
 </head>
 <body>
-  <header class="header">
-    <h1>Spot-a-Vibe</h1>
-    <p>Center yourself in front of the camera</p>
-  </header>
+  <!-- Three screens, one shown at a time (see showScreen in app.js): welcome, then
+       scanning, then the vibe Clef found. Each has its own address (#scan, #vibe), so
+       the browser's back button moves between them. -->
 
-  <main>
-    <section id="spotify" class="spotify-bar" hidden>
-      <p id="spotifyAccount" class="spotify-account"></p>
-      <a id="spotifyConnect" class="pill" href="/spotify/login" hidden>Connect Spotify</a>
-      <button id="spotifyDisconnect" class="link-button" type="button" hidden>Disconnect</button>
-    </section>
+  <!-- Welcome -->
+  <section id="welcome" class="screen welcome">
+    <header class="header">
+      <h1>Welcome to Spot-a-Vibe!</h1>
+    </header>
 
-    <section id="camera" class="camera">
-      <div class="video-wrap">
-        <video id="video" playsinline muted></video>
-        <canvas id="overlay"></canvas>
-        <div id="presence" class="presence unknown">
-          <span class="dot"></span>
-          <span id="presenceText">Waiting</span>
+    <main class="welcome-main">
+      <section class="welcome-section">
+        <h2>About</h2>
+        <p>
+          Spot-a-Vibe guesses your music taste from your style. Step in front of the camera
+          and Cloudflare's Clef-Flash model looks at your outfit and accessories to pick the
+          genre that fits you, then narrows it down to a sub-genre, like Trap, Emo or Bebop.
+          Connect Spotify and every vibe comes with songs from well-known artists in that
+          style, ready to save as a playlist.
+        </p>
+      </section>
+
+      <section class="welcome-section">
+        <h2>Getting Started</h2>
+        <ol class="steps">
+          <li class="step">
+            <div class="step-info">
+              <h3>Step 1</h3>
+              <p>Press <strong>Start Here!</strong>, then <strong>Start camera</strong> and allow camera access. Connect Spotify too if you want songs for your vibe.</p>
+            </div>
+            <!-- Replace with a photo of this step -->
+            <div class="step-photo" aria-hidden="true">1</div>
+          </li>
+          <li class="step">
+            <div class="step-info">
+              <h3>Step 2</h3>
+              <p>Center yourself in front of the camera. A photo is taken after a 3-second countdown, or press <strong>Capture</strong> to take one right away.</p>
+            </div>
+            <!-- Replace with a photo of this step -->
+            <div class="step-photo" aria-hidden="true">2</div>
+          </li>
+          <li class="step">
+            <div class="step-info">
+              <h3>Step 3</h3>
+              <p>See your vibe: your genre, your sub-genre and songs to match. Save them as a playlist, or scan again.</p>
+            </div>
+            <!-- Replace with a photo of this step -->
+            <div class="step-photo" aria-hidden="true">3</div>
+          </li>
+        </ol>
+      </section>
+    </main>
+
+    <div class="start-bar">
+      <button id="startHere" class="start-here" type="button">Start Here!</button>
+    </div>
+  </section>
+
+  <!-- Scanning -->
+  <section id="scan" class="screen" hidden>
+    <header class="header">
+      <h1>Spot-a-Vibe</h1>
+      <p>Center yourself in front of the camera</p>
+    </header>
+
+    <main>
+      <section id="spotify" class="spotify-bar" hidden>
+        <p id="spotifyAccount" class="spotify-account"></p>
+        <a id="spotifyConnect" class="pill spotify-connect" href="/spotify/login" hidden>Connect Spotify</a>
+        <button id="spotifyDisconnect" class="link-button" type="button" hidden>Disconnect</button>
+      </section>
+
+      <section id="camera" class="camera">
+        <div class="video-wrap">
+          <video id="video" playsinline muted></video>
+          <canvas id="overlay"></canvas>
+          <div id="presence" class="presence unknown">
+            <span class="dot"></span>
+            <span id="presenceText">Waiting</span>
+          </div>
+          <div id="countdown" class="countdown" hidden></div>
+          <div id="flash" class="flash"></div>
+          <div id="placeholder" class="placeholder">
+            <p id="loadStatus">Loading…</p>
+            <button id="startBtn" class="pill" disabled>Start camera</button>
+          </div>
         </div>
-        <div id="countdown" class="countdown" hidden></div>
-        <div id="flash" class="flash"></div>
-        <div id="placeholder" class="placeholder">
-          <p id="loadStatus">Loading…</p>
-          <button id="startBtn" class="pill" disabled>Start camera</button>
-        </div>
-      </div>
-      <button id="captureBtn" class="pill capture" type="button" disabled>Capture</button>
-    </section>
+        <button id="captureBtn" class="pill capture" type="button" disabled>Capture</button>
+      </section>
 
-    <section id="vibe" class="vibe" data-state="idle" aria-live="polite">
-      <p id="vibeMessage" class="vibe-message">Step in front of the camera, or press Capture.</p>
-      <div id="vibeResult" class="vibe-result" hidden>
+      <section id="vibe" class="vibe" data-state="idle" aria-live="polite">
+        <p id="vibeMessage" class="vibe-message">Step in front of the camera, or press Capture.</p>
+      </section>
+
+      <section class="snapshots">
+        <h2>Snapshots</h2>
+        <p id="noSnapshots" class="empty">A photo is taken 3 seconds after someone is detected, or when you press Capture, then sent to the server to guess a genre.</p>
+        <div id="snapshots" class="snap-grid"></div>
+      </section>
+
+      <details class="detector">
+        <summary>Detector</summary>
+        <div class="detector-body">
+          <dl class="stats">
+            <div><dt>People</dt><dd id="personCount">–</dd></div>
+            <div><dt>FPS</dt><dd id="fps">–</dd></div>
+            <div><dt>Present for</dt><dd id="presentFor">–</dd></div>
+            <div><dt>Away for</dt><dd id="awayFor">–</dd></div>
+          </dl>
+
+          <fieldset>
+            <legend>Settings</legend>
+            <label>
+              Sensitivity <output id="sensOut"></output>
+              <input id="sensitivity" type="range" min="1" max="8" step="1" value="5" />
+              <small>Higher = lower confidence threshold, more false positives</small>
+            </label>
+            <label>
+              Away after <output id="graceOut"></output>
+              <input id="grace" type="range" min="0.5" max="10" step="0.5" value="2" />
+            </label>
+            <label class="check">
+              <input id="boxes" type="checkbox" checked /> Show boxes
+            </label>
+            <label class="check">
+              <input id="notify" type="checkbox" /> Notify on change
+            </label>
+          </fieldset>
+
+          <div class="log">
+            <h3>Activity</h3>
+            <ol id="log"></ol>
+          </div>
+        </div>
+      </details>
+    </main>
+  </section>
+
+  <!-- Your vibe -->
+  <section id="result" class="screen" hidden>
+    <header class="header">
+      <h1>Spot-a-Vibe</h1>
+    </header>
+
+    <main class="result-main" aria-live="polite">
+      <section class="vibe-result">
         <p class="vibe-label">Your vibe is</p>
         <h2 id="vibeGenre" class="vibe-genre"></h2>
         <p id="vibeSubgenre" class="vibe-subgenre" hidden></p>
@@ -52,59 +165,18 @@
           <h3 id="vibeSubBarsTitle" class="bars-title" hidden></h3>
           <ol id="vibeSubBars" class="vibe-bars" aria-label="Probability for each style within the genre" hidden></ol>
         </details>
-      </div>
+      </section>
 
-      <div id="songs" class="songs" data-state="idle" hidden>
+      <section id="songs" class="songs" data-state="idle" hidden>
         <p id="songsMessage" class="songs-message"></p>
+        <a id="songsConnect" class="pill spotify-connect" href="/spotify/login" hidden>Connect Spotify</a>
         <ol id="songList" class="song-list" aria-label="Songs for this vibe" hidden></ol>
         <button id="spotifySave" class="pill" type="button" hidden>Save playlist to Spotify</button>
-      </div>
+      </section>
 
-      <button id="scanAgain" class="pill secondary" type="button" hidden>Scan again</button>
-    </section>
-
-    <section class="snapshots">
-      <h2>Snapshots</h2>
-      <p id="noSnapshots" class="empty">A photo is taken 3 seconds after someone is detected, or when you press Capture, then sent to the server to guess a genre.</p>
-      <div id="snapshots" class="snap-grid"></div>
-    </section>
-
-    <details class="detector">
-      <summary>Detector</summary>
-      <div class="detector-body">
-        <dl class="stats">
-          <div><dt>People</dt><dd id="personCount">–</dd></div>
-          <div><dt>FPS</dt><dd id="fps">–</dd></div>
-          <div><dt>Present for</dt><dd id="presentFor">–</dd></div>
-          <div><dt>Away for</dt><dd id="awayFor">–</dd></div>
-        </dl>
-
-        <fieldset>
-          <legend>Settings</legend>
-          <label>
-            Sensitivity <output id="sensOut"></output>
-            <input id="sensitivity" type="range" min="1" max="8" step="1" value="5" />
-            <small>Higher = lower confidence threshold, more false positives</small>
-          </label>
-          <label>
-            Away after <output id="graceOut"></output>
-            <input id="grace" type="range" min="0.5" max="10" step="0.5" value="2" />
-          </label>
-          <label class="check">
-            <input id="boxes" type="checkbox" checked /> Show boxes
-          </label>
-          <label class="check">
-            <input id="notify" type="checkbox" /> Notify on change
-          </label>
-        </fieldset>
-
-        <div class="log">
-          <h3>Activity</h3>
-          <ol id="log"></ol>
-        </div>
-      </div>
-    </details>
-  </main>
+      <button id="scanAgain" class="pill" type="button">Scan Again</button>
+    </main>
+  </section>
 
   <script src="app.js"></script>
 </body>

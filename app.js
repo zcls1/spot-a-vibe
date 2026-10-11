@@ -42,7 +42,6 @@ const els = {
   vibe: $('vibe'),
   vibeTime: $('vibeTime'),
   vibeMessage: $('vibeMessage'),
-  vibeResult: $('vibeResult'),
   vibeGenre: $('vibeGenre'),
   vibeConfidence: $('vibeConfidence'),
   vibeBars: $('vibeBars'),
@@ -53,6 +52,8 @@ const els = {
   spotify: $('spotify'),
   spotifyAccount: $('spotifyAccount'),
   spotifyConnect: $('spotifyConnect'),
+  songsConnect: $('songsConnect'),
+  startHere: $('startHere'),
   spotifyDisconnect: $('spotifyDisconnect'),
   songs: $('songs'),
   songsMessage: $('songsMessage'),
@@ -69,6 +70,37 @@ let lastVibe = null;         // { answers, takenAt } of the most recent result
 let spotifyConfigured = false;
 let spotifyConnected = false;
 let pendingPlaylist = null;  // { genre, subgenre, songs, requestId } shown in the card, ready to save
+
+// Screens: welcome, then scanning, then the vibe Clef found. The address (#scan, #vibe)
+// says which one is showing, so the browser's back button moves between them.
+const SCREENS = { welcome: $('welcome'), scan: $('scan'), vibe: $('result') };
+const IDLE_MESSAGE = 'Step in front of the camera, or press Capture.';
+let currentScreen = null;
+
+function showScreen() {
+  let name = location.hash.slice(1);
+  if (!(name in SCREENS)) name = 'welcome';
+  // There's nothing to show on the vibe screen before the first result.
+  if (name === 'vibe' && !lastVibe) name = 'scan';
+  // Snapshots are only taken on the scan screen, so leaving it stops a countdown.
+  if (currentScreen === 'scan' && name !== 'scan') {
+    cancelCountdown();
+    if (els.vibe.dataset.state === 'countdown') showVibeStatus('idle', IDLE_MESSAGE);
+  }
+  currentScreen = name;
+  for (const [key, screen] of Object.entries(SCREENS)) screen.hidden = key !== name;
+  window.scrollTo(0, 0);
+}
+
+// Switches right away rather than waiting for hashchange, which fires a moment later
+// (and then finds the screen already showing).
+function goTo(name) {
+  if (location.hash.slice(1) !== name) location.hash = name;
+  showScreen();
+}
+
+window.addEventListener('hashchange', showScreen);
+els.startHere.addEventListener('click', () => goTo('scan'));
 
 const presence = {
   state: 'unknown',       // 'unknown' | 'present' | 'away'
@@ -195,14 +227,11 @@ function setPresence(state, since) {
 
   addLogEntry(state === 'present' ? 'Arrived' : 'Left', state === 'present' ? 'in' : 'out');
   if (state === 'present') {
-    startCountdown();
+    // Only on the scan screen, so walking past while reading a result doesn't rescan.
+    if (currentScreen === 'scan') startCountdown();
   } else {
     cancelCountdown();
-    // Leaving mid-countdown: go back to whatever the card showed before.
-    if (els.vibe.dataset.state === 'countdown') {
-      if (lastVibe) showVibeResult(lastVibe.answers, lastVibe.takenAt);
-      else showVibeStatus('idle', 'Step in front of the camera, or press Capture.');
-    }
+    if (els.vibe.dataset.state === 'countdown') showVibeStatus('idle', IDLE_MESSAGE);
   }
 
   if (prev !== 'unknown' && els.notify.checked && Notification.permission === 'granted') {
@@ -308,6 +337,9 @@ function addSnapshot(blob, takenAt) {
         lastVibe = { answers, takenAt };
         showVibeResult(answers, takenAt);
         findSongs(answers, requestId);
+        showVibeStatus('idle', IDLE_MESSAGE);
+        // Land on the result, unless the person has since moved to another screen.
+        if (currentScreen === 'scan') goTo('vibe');
       }
       genre.textContent = vibeName(answers);
       genre.title = [answers.genre, answers.subgenre].filter(Boolean)
@@ -329,15 +361,11 @@ function addSnapshot(blob, takenAt) {
   );
 }
 
-// Vibe card: idle / countdown / loading / error show a message; result shows the genre,
-// its breakdown and, when Spotify is set up, songs for it.
+// Status line on the scan screen: idle, countdown, loading (reading the vibe) or error.
+// Results go to the vibe screen instead (showVibeResult).
 function showVibeStatus(state, message) {
   els.vibe.dataset.state = state;
   els.vibeMessage.textContent = message;
-  els.vibeMessage.hidden = false;
-  els.vibeResult.hidden = true;
-  els.songs.hidden = true;
-  els.scanAgain.hidden = true;
 }
 
 // "Rap · Trap", or just "Rap" from an endpoint that only asks for the genre.
@@ -349,11 +377,7 @@ function vibeName({ genre, subgenre }) {
 // the second pass and missing if the endpoint still runs the one-pass handler.
 function showVibeResult(answers, takenAt) {
   const { genre, subgenre } = answers;
-  els.vibe.dataset.state = 'result';
-  els.vibeMessage.hidden = true;
-  els.vibeResult.hidden = false;
   els.songs.hidden = !spotifyConfigured;
-  els.scanAgain.hidden = !running;
   els.vibeGenre.textContent = genre.choice;
   els.vibeConfidence.textContent = `${Math.round(genre.confidence * 100)}% confident in ${genre.choice}`;
   els.vibeTime.textContent = `from ${takenAt.toLocaleTimeString()}`;
@@ -423,6 +447,7 @@ async function initSpotify() {
     lastVibe = { answers: restored.answers, takenAt: new Date(restored.takenAt) };
     showVibeResult(lastVibe.answers, lastVibe.takenAt);
     findSongs(lastVibe.answers, latestGenreRequest);
+    goTo('vibe');
   }
 }
 
@@ -430,6 +455,7 @@ async function initSpotify() {
 function showSpotifyUnavailable(text) {
   els.spotify.hidden = false;
   els.spotifyConnect.hidden = true;
+  els.songsConnect.hidden = true;
   els.spotifyDisconnect.hidden = true;
   els.spotifyAccount.textContent = text;
 }
@@ -439,6 +465,7 @@ function setSpotifyConnected(connected) {
   pendingPlaylist = null;
   els.spotify.hidden = false;
   els.spotifyConnect.hidden = connected;
+  els.songsConnect.hidden = connected;
   els.spotifyDisconnect.hidden = !connected;
   els.spotifyAccount.textContent = connected
     ? 'Spotify connected'
@@ -448,7 +475,7 @@ function setSpotifyConnected(connected) {
   if (connected) {
     showSongsMessage('idle', 'Songs for your vibe will show up here.');
   } else {
-    showSongsMessage('idle', 'Connect Spotify above to get songs for this vibe.');
+    showSongsMessage('idle', 'Connect Spotify to get songs for this vibe.');
   }
 }
 
@@ -567,7 +594,8 @@ async function savePlaylist() {
 els.spotifySave.addEventListener('click', savePlaylist);
 // Sign-in opens in a popup, so the camera and the current vibe stay put. If the browser
 // blocks it, the link navigates as usual and the vibe is restored on the way back.
-els.spotifyConnect.addEventListener('click', (event) => {
+// Both Connect buttons (scan screen and vibe screen) work the same way.
+function connectSpotify(event) {
   const popup = window.open('/spotify/login?popup=1', 'spotify-sign-in', 'popup,width=500,height=760');
   if (popup) {
     event.preventDefault();
@@ -581,7 +609,9 @@ els.spotifyConnect.addEventListener('click', (event) => {
       takenAt: lastVibe.takenAt.toISOString(),
     }));
   } catch {}
-});
+}
+els.spotifyConnect.addEventListener('click', connectSpotify);
+els.songsConnect.addEventListener('click', connectSpotify);
 // The popup's last page posts this once the server has (or hasn't) stored the tokens.
 window.addEventListener('message', async (event) => {
   if (event.origin !== location.origin || event.data !== 'spotify-sign-in-done') return;
@@ -591,7 +621,7 @@ window.addEventListener('message', async (event) => {
     setSpotifyConnected(true);
     addLogEntry('Spotify connected', 'snap');
     // Skip while a newer snapshot is being read; its result fetches songs itself.
-    if (lastVibe && els.vibe.dataset.state === 'result') {
+    if (lastVibe && els.vibe.dataset.state !== 'loading') {
       findSongs(lastVibe.answers, latestGenreRequest);
     }
   } catch (err) {
@@ -604,17 +634,18 @@ els.spotifyDisconnect.addEventListener('click', async () => {
 });
 initSpotify();
 
-// Capture snaps a photo right away; Scan again runs the countdown first.
+// Capture snaps a photo right away; Scan Again goes back to the camera and runs the
+// countdown (or, if the camera isn't on yet, leaves it to Start camera).
 els.captureBtn.addEventListener('click', () => {
   if (!running) return;
   cancelCountdown();
   takeSnapshot();
 });
 els.scanAgain.addEventListener('click', () => {
-  if (!running) return;
-  els.video.parentElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
-  startCountdown();
+  goTo('scan');
+  if (running) startCountdown();
 });
+showScreen();
 
 // Sends a snapshot to the Flask server, which runs it through Clef-Flash twice: once for
 // the genre, then for the sub-genre within it. Returns { genre, subgenre } choice answers.

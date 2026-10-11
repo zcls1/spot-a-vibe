@@ -1,7 +1,7 @@
 # spot-a-vibe
 Knight Hacks IX
 
-Step in front of your laptop camera and spot-a-vibe guesses your music taste. When it sees someone, it counts down and snaps a photo (or press **Capture** to snap one right away), then asks [Cloudflare's Clef-Flash](https://huggingface.co/Cloudflare/clef-flash) model which genre fits their style, then asks it again which style of that genre fits best. The result appears under the camera as "Your vibe is": the top genre and sub-genre (e.g. Rap · Trap), how confident the model is, and a ranked breakdown across all nine genres (Pop, Rock, Metal, Rap, R&B, Country, Electronic, EDM and Jazz) and the five sub-genres of the top one. With Spotify connected, it also suggests songs for the vibe that can be saved as a playlist.
+Press **Start Here!** on the welcome screen, step in front of your laptop camera, and spot-a-vibe guesses your music taste. When it sees someone, it counts down and snaps a photo (or press **Capture** to snap one right away), then asks [Cloudflare's Clef-Flash](https://huggingface.co/Cloudflare/clef-flash) model which genre fits their style, then asks it again which style of that genre fits best. The page then switches to "Your vibe is": the top genre and sub-genre (e.g. Rap · Trap), how confident the model is, and a ranked breakdown across all nine genres (Pop, Rock, Metal, Rap, R&B, Country, Electronic, EDM and Jazz) and the five sub-genres of the top one. With Spotify connected, it also suggests songs for the vibe that can be saved as a playlist.
 
 Person detection runs entirely in the browser with [OpenCV.js](https://docs.opencv.org/4.9.0/opencv.js) and a MobileNet-SSD object detector. Only the snapshots are sent to the Flask server for genre detection.
 
@@ -73,7 +73,7 @@ Spotify needs an app registered once by the developer; people using the page the
 3. Under **Settings → User Management**, add every Spotify account that will sign in (see development mode below).
 4. Restart the server. Until these are set, the bar above the camera says Spotify isn't set up.
 
-Connect a Spotify account with the **Connect Spotify** bar above the camera. Sign-in opens in a popup, so the camera and the current vibe stay put, and songs for that vibe load as soon as the popup closes. If the browser blocks popups, the page goes to Spotify itself instead; the current vibe is kept in `sessionStorage` and shown again on the way back, but the camera needs starting again. After that, every new vibe shows song cards (album art, title, artist, linking to Spotify) picked to match it, and **Save playlist to Spotify** saves them as a private playlist on that account. One account is connected at a time; **Disconnect** lets another one sign in.
+Connect a Spotify account with the **Connect Spotify** bar above the camera, or the button on the vibe screen. Sign-in opens in a popup, so the camera and the current vibe stay put, and songs for that vibe load as soon as the popup closes. If the browser blocks popups, the page goes to Spotify itself instead; the current vibe is kept in `sessionStorage` and shown again on the way back, but the camera needs starting again. After that, every new vibe shows song cards (album art, title, artist, linking to Spotify) picked to match it, and **Save playlist to Spotify** saves them as a private playlist on that account. One account is connected at a time; **Disconnect** lets another one sign in.
 
 - **Sign-in:** `/spotify/login` signs the user in (Authorization Code flow, with permission to create playlists), and `/api/spotify/status` reports whether they are connected. With `?popup=1`, as the page uses it, the callback answers with a page that tells the opener it's done and closes, instead of redirecting to `/`. Tokens are kept in the signed session cookie and refreshed automatically.
 - **Songs:** `POST /api/playlist/songs` with `{"genre": "Rap", "subgenres": {...}}` (Clef's probability for each of the genre's sub-genres) picks songs by well-known artists, so they're recognisable; Spotify no longer tells apps how popular a song is. `subgenre_artists.py` lists 5 artists per sub-genre. 5 artists are drawn at random, each weighted by their sub-genre's probability: with Trap at 0.8, about three quarters of the artists are trap artists, while a Trap/Pop Rap split mixes both. Each one contributes 2 songs from their top 5 search results. If an artist search comes up short, the rest is filled from the genre's top 50 search results (`genre:"rap"`). Without sub-genre probabilities (an endpoint still running the one-pass handler), every sub-genre counts equally.
@@ -83,6 +83,16 @@ Connect a Spotify account with the **Connect Spotify** bar above the camera. Sig
 For local runs, the variables can go in a `.env` file instead of the environment.
 
 ## How it works
+
+### Screens
+
+`index.html` has three screens, one shown at a time, each with its own address so the browser's back button moves between them:
+
+- **Welcome** (`/`): what spot-a-vibe does and how to get started, with a **Start Here!** bar at the bottom. The step tiles are placeholders for photos of each step.
+- **Scan** (`#scan`): the camera, **Capture**, the Spotify bar, the snapshot gallery and the detector settings. The line under the camera shows the current stage: waiting, countdown, "Reading the vibe…" while the model runs, or the error if the model fails.
+- **Your vibe** (`#vibe`): opens once Clef has read the newest snapshot. It shows the genre and sub-genre, the breakdown, songs to match, **Save playlist to Spotify** and **Scan Again**, which goes back to the camera and starts a countdown.
+
+The camera keeps running across screens, but snapshots are only taken automatically on the scan screen, so someone walking past while a result is showing doesn't trigger a new scan.
 
 ### Genre detection
 
@@ -101,9 +111,9 @@ For local runs, the variables can go in a `.env` file instead of the environment
 | EDM | Big Room House, Dubstep, Melodic Bass, Tech House, Trance |
 | Jazz | Bebop, Cool Jazz, Swing & Big Band, Jazz Fusion, Vocal Jazz |
 
-- Each answer comes back with a probability for every option. The result under the camera shows the top genre and sub-genre with their confidence and, under "Full breakdown", a ranked bar for each genre and for each sub-genre of the top one; each snapshot in the gallery is labelled with its genre and sub-genre too (hover for the full breakdown).
-- If Spotify is connected, song cards picked to match the newest result's sub-genre probabilities follow, with a button to save them as a playlist (see [Spotify](#spotify)). **Scan again** runs the countdown for a fresh snapshot.
-- Before a result, the same spot shows the current stage: waiting, countdown, "Reading the vibe…" while the model runs, then the result, or the error if the model fails. If several snapshots are in flight, only the newest result is shown.
+- Each answer comes back with a probability for every option. The vibe screen shows the top genre and sub-genre with their confidence and, under "Full breakdown", a ranked bar for each genre and for each sub-genre of the top one; each snapshot in the gallery is labelled with its genre and sub-genre too (hover for the full breakdown).
+- If Spotify is connected, song cards picked to match the newest result's sub-genre probabilities follow, with a button to save them as a playlist (see [Spotify](#spotify)).
+- If several snapshots are in flight, only the newest result is shown.
 
 ### Spotting a person
 
