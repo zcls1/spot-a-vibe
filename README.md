@@ -1,7 +1,7 @@
 # spot-a-vibe
 Knight Hacks IX
 
-Press **Start Here!** on the welcome screen, step in front of your laptop camera, and spot-a-vibe guesses your music taste. When it sees someone, it counts down and snaps a photo (or press **Capture** to snap one right away), then asks [Cloudflare's Clef-Flash](https://huggingface.co/Cloudflare/clef-flash) model which genre fits their style, then asks it again which style of that genre fits best. The page then switches to "Your vibe is": the top genre and sub-genre (e.g. Rap · Trap), how confident the model is, and a ranked breakdown across all nine genres (Pop, Rock, Metal, Rap, R&B, Country, Electronic, EDM and Jazz) and the five sub-genres of the top one. With Spotify connected, it also suggests songs for the vibe that can be saved as a playlist.
+Step in front of your laptop camera and spot-a-vibe guesses your music taste. When it sees someone, it counts down and snaps a photo (or press **Capture** to snap one right away), then asks [Cloudflare's Clef-Flash](https://huggingface.co/Cloudflare/clef-flash) model which genre fits their style, then asks it again which style of that genre fits best. The page then switches to "Your vibe is": the top genre and sub-genre (e.g. Rap · Trap), how confident the model is, and a ranked breakdown across all nine genres (Pop, Rock, Metal, Rap, R&B, Country, Electronic, EDM and Jazz) and the five sub-genres of the top one. With Spotify connected, it also suggests songs for the vibe that can be saved as a playlist.
 
 Person detection runs entirely in the browser with [OpenCV.js](https://docs.opencv.org/4.9.0/opencv.js) and a MobileNet-SSD object detector. Only the snapshots are sent to the Flask server for genre detection.
 
