@@ -9,6 +9,9 @@
   --green: #1db954;
   --green-bright: #1ed760;
   --green-muted: #1d5c34;
+  /* The welcome screen's accent, the first stop of its gradient. */
+  --accent: #00fa92;
+  --gradient: linear-gradient(to right, #00fa92, #00e5fa, #0068fa);
   --away: #f15e6c;
   --unknown: #7f8696;
   color-scheme: dark;
@@ -73,7 +76,25 @@ button:disabled { opacity: 0.5; cursor: progress; }
 
 /* --- Welcome screen (the Frontend branch's homepage) ------------------------------- */
 
+/* The logo tiled behind the page, in two offset layers so the rows interleave. */
+.welcome {
+  min-height: 100vh;
+  background-image: url("logo.png"), url("logo.png");
+  background-repeat: repeat;
+  background-position: 0 0, 80px 80px;
+  background-size: 160px 160px;
+  background-attachment: fixed;
+}
+
 .welcome .header h1 { font-size: clamp(2rem, 6vw, 2.5rem); }
+
+.gradient-text {
+  display: inline-block;
+  background: var(--gradient);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
 
 /* Room at the bottom so the fixed Start Here bar never covers the last step. */
 .welcome-main {
@@ -85,8 +106,8 @@ button:disabled { opacity: 0.5; cursor: progress; }
 .welcome-section h2 {
   margin: 20px 0 16px;
   padding-bottom: 10px;
-  border-bottom: 2px solid var(--green-bright);
-  color: var(--green-bright);
+  border-bottom: 2px solid var(--accent);
+  color: var(--accent);
   font-size: clamp(32px, 7vw, 50px);
 }
 .welcome-section p { margin: 0; font-size: clamp(17px, 2.4vw, 22px); line-height: 1.5; }
@@ -97,7 +118,7 @@ button:disabled { opacity: 0.5; cursor: progress; }
   padding: 0;
   display: flex;
   flex-direction: column;
-  gap: 20px;
+  gap: clamp(40px, 8vw, 100px);
 }
 .step {
   display: flex;
@@ -117,7 +138,7 @@ button:disabled { opacity: 0.5; cursor: progress; }
   justify-content: center;
   border-radius: 15px;
   background: var(--panel);
-  color: var(--green);
+  color: var(--accent);
   font-size: clamp(48px, 10vw, 96px);
   font-weight: bold;
 }
@@ -139,11 +160,14 @@ img.step-photo { object-fit: cover; }
   display: flex;
   align-items: center;
   justify-content: center;
+  padding: 0 12px;
   border-radius: 10px;
-  background-image: linear-gradient(to right, #00fa92, #00e5fa, #0068fa);
+  background-image: var(--gradient);
   box-shadow: 0 6px 20px rgba(0, 0, 0, 0.5);
 }
 .start-here {
+  flex: none;
+  white-space: nowrap;
   padding: 12px 32px;
   border: 0;
   border-radius: 25px;
@@ -151,9 +175,16 @@ img.step-photo { object-fit: cover; }
   color: #000;
   font-size: 16px;
   font-weight: bold;
-  transition: transform 0.15s;
 }
-.start-here:hover { transform: scale(1.05); }
+.start-here:hover { background: #dbdbdb; }
+.start-here:active { background: #acacac; }
+.start-text {
+  margin: 0 10px 0 0;
+  line-height: 1.2;
+  color: #fff;
+  font-size: clamp(15px, 3vw, 18.72px);
+  font-weight: bold;
+}
 
 /* --- Spotify account ----------------------------------------------------------- */
 
