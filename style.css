@@ -321,20 +321,26 @@ img.step-photo { object-fit: cover; }
   letter-spacing: 3px;
   text-transform: uppercase;
 }
+/* The genre is the headline; the sub-genre sits under it as a quieter subtitle. */
 .vibe-genre {
-  margin: 10px 0;
+  margin: 6px 0 0;
   color: var(--green);
-  font-size: clamp(36px, 8vw, 56px);
-  line-height: 1.1;
+  /* Scales with the screen so the longest genre, ELECTRONIC, stays on one line on a phone. */
+  font-size: clamp(34px, 11vw, 112px);
+  font-weight: 900;
+  letter-spacing: -0.02em;
+  line-height: 1;
   text-transform: uppercase;
   overflow-wrap: anywhere;
 }
 .vibe-subgenre {
-  margin: 0 0 10px;
-  font-size: clamp(20px, 4vw, 26px);
-  font-weight: bold;
+  margin: 10px 0 0;
+  color: var(--muted);
+  font-size: clamp(18px, 3.5vw, 22px);
+  font-weight: normal;
+  letter-spacing: 0.04em;
 }
-.vibe-meta { margin: 0; color: var(--muted); font-size: 0.9rem; }
+.vibe-meta { margin: 16px 0 0; color: var(--muted); font-size: 0.85rem; opacity: 0.8; }
 
 .vibe-breakdown { margin: 16px auto 0; max-width: 420px; text-align: left; }
 .vibe-breakdown summary {

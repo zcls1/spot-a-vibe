@@ -379,7 +379,9 @@ function showVibeResult(answers, takenAt) {
   const { genre, subgenre } = answers;
   els.songs.hidden = !spotifyConfigured;
   els.vibeGenre.textContent = genre.choice;
-  els.vibeConfidence.textContent = `${Math.round(genre.confidence * 100)}% confident in ${genre.choice}`;
+  els.vibeConfidence.textContent = [genre, subgenre].filter(Boolean)
+    .map((answer) => `${answer.choice} ${Math.round(answer.confidence * 100)}%`)
+    .join(' · ');
   els.vibeTime.textContent = `from ${takenAt.toLocaleTimeString()}`;
   renderBars(els.vibeBars, genre);
 
@@ -387,7 +389,7 @@ function showVibeResult(answers, takenAt) {
   els.vibeSubBarsTitle.hidden = !subgenre;
   els.vibeSubBars.hidden = !subgenre;
   if (subgenre) {
-    els.vibeSubgenre.textContent = `${subgenre.choice} · ${Math.round(subgenre.confidence * 100)}%`;
+    els.vibeSubgenre.textContent = subgenre.choice;
     els.vibeSubBarsTitle.textContent = `Style of ${genre.choice}`;
     renderBars(els.vibeSubBars, subgenre);
   }
