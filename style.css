@@ -9,7 +9,13 @@
   --green: #1db954;
   --green-bright: #1ed760;
   --green-muted: #1d5c34;
+  /* The welcome screen's accent, the first stop of its gradient. */
+  --accent: #00fa92;
+  --gradient: linear-gradient(to right, #00fa92, #00e5fa, #0068fa);
   --away: #f15e6c;
+  /* Text boxes: a dark wash over the moving background, and a thin edge. */
+  --text-box: rgba(18, 18, 18, 0.7);
+  --text-box-line: rgba(255, 255, 255, 0.08);
   --unknown: #7f8696;
   color-scheme: dark;
 }
@@ -18,17 +24,54 @@
 
 body {
   margin: 0;
-  background: var(--bg);
+  background-color: var(--bg);
   color: var(--text);
   font: 15px/1.5 Arial, system-ui, -apple-system, "Segoe UI", sans-serif;
+  /* The logo tiled behind every screen, in two offset layers so the rows interleave. */
+  background-image: url("logo.png"), url("logo.png");
+  background-repeat: repeat;
+  background-position: 0 0, 80px 80px;
+  background-size: 160px 160px;
+  background-attachment: fixed;
+}
+/* background.js draws the tiles itself, so drop the CSS ones once it's running. */
+body.has-shader { background-image: none; }
+.page-bg {
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
 }
 
 .header {
+  /* Stacks the title box and anything under it, each centred on its own line. */
+  display: flex;
+  flex-direction: column;
+  align-items: center;
   text-align: center;
   padding: 20px 16px 0;
 }
-.header h1 { margin: 5px 0 10px; font-size: 2rem; }
-.header p { margin: 0; color: var(--green-bright); }
+.header h1 {
+  display: inline-block;
+  margin: 5px 0 10px;
+  padding: 8px 24px;
+  font-size: 2rem;
+  /* Every screen's title sits in a dark box edged with the gradient. */
+  border: 2px solid;
+  border-image: var(--gradient) 1;
+  background: rgba(18, 18, 18, 0.9);
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.5);
+}
+.header p {
+  display: inline-block;
+  margin: 0;
+  padding: 8px 16px;
+  color: var(--green-bright);
+  background: var(--text-box);
+  box-shadow: inset 0 0 0 1px var(--text-box-line);
+}
 
 main {
   max-width: 800px;
@@ -48,16 +91,18 @@ button:disabled { opacity: 0.5; cursor: progress; }
   display: inline-block;
   padding: 12px 28px;
   border: 0;
-  border-radius: 30px;
-  background: var(--green);
-  color: var(--bg);
+  background: #fff;
+  color: #000;
   font-size: 16px;
   font-weight: bold;
   text-decoration: none;
   box-shadow: 0 5px 10px rgba(0, 0, 0, 0.5);
   transition: background 0.15s, color 0.15s;
 }
-.pill:hover:not(:disabled) { background: var(--green-bright); }
+.pill:hover:not(:disabled) { background: #dbdbdb; }
+.pill:active:not(:disabled) { background: #acacac; }
+.pill.spotify-connect { background: var(--green); color: var(--bg); }
+.pill.spotify-connect:hover { background: var(--green-bright); }
 .pill.secondary { background: var(--raised); color: var(--text); }
 .pill.secondary:hover:not(:disabled) { background: #3a3a3a; }
 
@@ -71,6 +116,119 @@ button:disabled { opacity: 0.5; cursor: progress; }
 }
 .link-button:hover { color: var(--text); }
 
+/* --- Welcome screen (the Frontend branch's homepage) ------------------------------- */
+
+.welcome { min-height: 100vh; }
+
+.welcome .header h1 { font-size: clamp(32px, 7vw, 50px); }
+/* "Welcome" and "Spot-a-Vibe!" stand a bit larger than the "to" between them. */
+.title-big { font-size: 1.3em; }
+
+/* Each block of text and each panel sits in its own square box, so it reads clearly over
+   the background. A heading's box fits just its words and is edged in the accent green. */
+.heading-box,
+.welcome-section > p,
+.step-info,
+.spotify-bar,
+.presence,
+.vibe-message,
+.vibe-result,
+.songs-message,
+.song,
+.snapshots .empty,
+.snap-grid figure,
+.detector,
+.stats div {
+  background: var(--text-box);
+  box-shadow: inset 0 0 0 1px var(--text-box-line);
+}
+.heading-box {
+  display: inline-block;
+  /* 1px more padding all round for the 1px thinner border, so the box keeps its size. */
+  padding: 9px 21px;
+  border: 1px solid var(--accent);
+  box-shadow: none;
+}
+.welcome-section > p,
+.step-info { padding: 16px 20px; }
+
+.gradient-text {
+  display: inline-block;
+  background: var(--gradient);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+/* Room at the bottom so the fixed Start Here bar never covers the last step. */
+.welcome-main {
+  max-width: 900px;
+  padding-bottom: 120px;
+  gap: 8px;
+}
+
+.welcome-section h2 {
+  margin: 20px 0 16px;
+  color: var(--accent);
+  font-size: clamp(29px, 5.4vw, 36px);
+}
+.welcome-section p { margin: 0; font-size: clamp(17px, 2.4vw, 22px); line-height: 1.5; }
+
+.steps {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: clamp(40px, 8vw, 100px);
+}
+.step {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+}
+.step-info { flex: 1; min-width: 0; align-self: flex-start; }
+.step-info h3 { margin: 0 0 12px; font-size: clamp(23px, 4.5vw, 32px); }
+.step-info .heading-box { padding: 5px 15px; }
+
+.start-bar {
+  position: fixed;
+  left: 50%;
+  bottom: 10px;
+  transform: translateX(-50%);
+  width: calc(100% - 20px);
+  max-width: 1200px;
+  height: 72px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 12px;
+  background-image: var(--gradient);
+  /* A thin dark grey edge, like the text boxes' outline, plus the drop shadow. */
+  box-shadow: inset 0 0 0 1px var(--border), 0 6px 20px rgba(0, 0, 0, 0.5);
+}
+.start-here {
+  flex: none;
+  white-space: nowrap;
+  padding: 12px 32px;
+  border: 0;
+  background: #fff;
+  color: #000;
+  font-size: 16px;
+  font-weight: bold;
+  /* The same thin dark grey edge as the start bar around it. */
+  box-shadow: inset 0 0 0 1px var(--border);
+}
+.start-here:hover { background: #dbdbdb; }
+.start-here:active { background: #acacac; }
+.start-text {
+  margin: 0 10px 0 0;
+  line-height: 1.2;
+  color: #fff;
+  font-size: clamp(15px, 3vw, 18.72px);
+  font-weight: bold;
+}
+
 /* --- Spotify account ----------------------------------------------------------- */
 
 .spotify-bar {
@@ -80,8 +238,6 @@ button:disabled { opacity: 0.5; cursor: progress; }
   gap: 12px;
   flex-wrap: wrap;
   padding: 12px 16px;
-  background: var(--panel);
-  border-radius: 15px;
 }
 .spotify-account { margin: 0; color: var(--muted); }
 .spotify-bar .pill { padding: 8px 20px; font-size: 15px; box-shadow: none; }
@@ -100,7 +256,6 @@ button:disabled { opacity: 0.5; cursor: progress; }
   width: 100%;
   aspect-ratio: 4 / 3;
   background: #000;
-  border-radius: 12px;
   overflow: hidden;
 }
 .video-wrap::after {
@@ -108,7 +263,6 @@ button:disabled { opacity: 0.5; cursor: progress; }
   position: absolute;
   inset: 0;
   border: 5px solid #000;
-  border-radius: 12px;
   pointer-events: none;
 }
 
@@ -144,8 +298,6 @@ button:disabled { opacity: 0.5; cursor: progress; }
   align-items: center;
   gap: 8px;
   padding: 6px 12px;
-  border-radius: 999px;
-  background: rgba(0, 0, 0, 0.6);
   font-size: 0.85rem;
   font-weight: 600;
 }
@@ -201,7 +353,9 @@ button:disabled { opacity: 0.5; cursor: progress; }
 
 .capture { min-width: 140px; }
 
-/* --- Vibe result (the Frontend branch's genre page) ------------------------------ */
+/* --- Vibe screen (the Frontend branch's genre page) ------------------------------ */
+
+.result-main { align-items: center; text-align: center; gap: 30px; }
 
 .vibe {
   display: flex;
@@ -210,7 +364,7 @@ button:disabled { opacity: 0.5; cursor: progress; }
   gap: 24px;
   text-align: center;
 }
-.vibe-message { margin: 0; color: var(--muted); }
+.vibe-message { margin: 0; padding: 10px 16px; color: var(--muted); }
 .vibe[data-state="countdown"] .vibe-message { color: var(--text); }
 .vibe[data-state="error"] .vibe-message { color: var(--away); }
 .vibe[data-state="loading"] .vibe-message::before,
@@ -227,7 +381,7 @@ button:disabled { opacity: 0.5; cursor: progress; }
 }
 @keyframes spin { to { transform: rotate(360deg); } }
 
-.vibe-result { width: 100%; }
+.vibe-result { width: 100%; padding: 24px 20px; }
 .vibe-label {
   margin: 0;
   color: var(--muted);
@@ -235,20 +389,33 @@ button:disabled { opacity: 0.5; cursor: progress; }
   letter-spacing: 3px;
   text-transform: uppercase;
 }
+/* The genre is the headline, in a green-edged box like the other headings; the sub-genre
+   sits under it as a quieter subtitle. */
 .vibe-genre {
-  margin: 10px 0;
-  color: var(--green);
-  font-size: clamp(36px, 8vw, 56px);
-  line-height: 1.1;
+  display: inline-block;
+  max-width: 100%;
+  margin: 10px 0 0;
+  padding: 12px 20px;
+  border: 1px solid var(--accent);
+  color: var(--accent);
+  /* Scales with the width left inside the card and this box (about 114px less than the
+     screen, counting the page's margins) so the longest genre, ELECTRONIC, stays on one
+     line, phone to desktop. */
+  font-size: clamp(26px, calc((100vw - 114px) * 0.12), 82px);
+  font-weight: 900;
+  letter-spacing: -0.02em;
+  line-height: 1;
   text-transform: uppercase;
   overflow-wrap: anywhere;
 }
 .vibe-subgenre {
-  margin: 0 0 10px;
-  font-size: clamp(20px, 4vw, 26px);
-  font-weight: bold;
+  margin: 10px 0 0;
+  color: var(--muted);
+  font-size: clamp(18px, 3.5vw, 22px);
+  font-weight: normal;
+  letter-spacing: 0.04em;
 }
-.vibe-meta { margin: 0; color: var(--muted); font-size: 0.9rem; }
+.vibe-meta { margin: 16px 0 0; color: var(--muted); font-size: 0.85rem; opacity: 0.8; }
 
 .vibe-breakdown { margin: 16px auto 0; max-width: 420px; text-align: left; }
 .vibe-breakdown summary {
@@ -283,18 +450,16 @@ button:disabled { opacity: 0.5; cursor: progress; }
 .vibe-bars li.top { color: var(--text); font-weight: 600; }
 .vibe-bars .track {
   height: 8px;
-  border-radius: 4px;
   background: var(--raised);
   overflow: hidden;
 }
 .vibe-bars .fill {
   display: block;
   height: 100%;
-  border-radius: 4px;
   background: var(--green-muted);
   transition: width 0.4s ease-out;
 }
-.vibe-bars li.top .fill { background: var(--green); }
+.vibe-bars li.top .fill { background: var(--accent); }
 .vibe-bars .value { text-align: right; font-variant-numeric: tabular-nums; }
 
 /* --- Songs --------------------------------------------------------------------- */
@@ -306,7 +471,8 @@ button:disabled { opacity: 0.5; cursor: progress; }
   align-items: center;
   gap: 16px;
 }
-.songs-message { margin: 0; color: var(--muted); }
+.songs-message { margin: 0; padding: 10px 16px; color: var(--muted); }
+.songs-message:empty { display: none; }
 .songs[data-state="done"] .songs-message { color: var(--text); }
 .songs[data-state="error"] .songs-message { color: var(--away); }
 .songs-message a { color: var(--green-bright); }
@@ -327,8 +493,6 @@ button:disabled { opacity: 0.5; cursor: progress; }
   gap: 14px;
   height: 100%;
   padding: 12px;
-  background: var(--panel);
-  border-radius: 15px;
   color: inherit;
   text-decoration: none;
   transition: background 0.15s;
@@ -339,7 +503,6 @@ a.song[href]:hover { background: var(--raised); }
   height: 64px;
   flex: none;
   object-fit: cover;
-  border-radius: 8px;
   background: var(--raised);
 }
 .song .info { display: flex; flex-direction: column; min-width: 0; }
@@ -348,8 +511,9 @@ a.song[href]:hover { background: var(--raised); }
 
 /* --- Snapshots ----------------------------------------------------------------- */
 
-.snapshots h2 { font-size: 1rem; margin: 0 0 10px; }
-.snapshots .empty { color: var(--muted); margin: 0; }
+.snapshots h2 { font-size: 1rem; margin: 0 0 10px; color: var(--accent); }
+.snapshots .heading-box { padding: 5px 13px; }
+.snapshots .empty { color: var(--muted); margin: 0; padding: 12px 16px; }
 .snap-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(min(100%, 180px), 1fr));
@@ -357,8 +521,6 @@ a.song[href]:hover { background: var(--raised); }
 }
 .snap-grid figure {
   margin: 0;
-  background: var(--panel);
-  border-radius: 10px;
   overflow: hidden;
 }
 .snap-grid img { display: block; width: 100%; }
@@ -376,11 +538,7 @@ a.song[href]:hover { background: var(--raised); }
 
 /* --- Detector details ---------------------------------------------------------- */
 
-.detector {
-  background: var(--panel);
-  border-radius: 15px;
-  padding: 12px 16px;
-}
+.detector { padding: 12px 16px; }
 .detector summary { color: var(--muted); cursor: pointer; }
 .detector-body {
   display: grid;
@@ -396,17 +554,12 @@ a.song[href]:hover { background: var(--raised); }
   margin: 0;
   align-content: start;
 }
-.stats div {
-  background: var(--bg);
-  border-radius: 8px;
-  padding: 8px 10px;
-}
+.stats div { padding: 8px 10px; }
 .stats dt { color: var(--muted); font-size: 0.8rem; }
 .stats dd { margin: 0; font-size: 1.1rem; font-variant-numeric: tabular-nums; }
 
 fieldset {
   border: 1px solid var(--border);
-  border-radius: 8px;
   padding: 10px 12px 12px;
   margin: 0;
   display: flex;
