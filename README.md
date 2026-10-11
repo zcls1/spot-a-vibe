@@ -20,29 +20,6 @@ The first run downloads the model (~19 GB). Startup then takes about a minute: l
 
 Open the page at http://127.0.0.1:8000. Camera access requires a secure context (`127.0.0.1`, `localhost` or HTTPS, not `file://`), and Spotify sign-in only works at the exact address registered with Spotify, so use `127.0.0.1` rather than `localhost`.
 
-## Deploy
-
-The deployment has two parts: the model runs on a GPU [Hugging Face Inference Endpoint](https://huggingface.co/docs/inference-endpoints), and the web server (a small CPU container) serves the page and forwards snapshots to it. Keeping the two apart means changes to the web server never require rebuilding or restarting the GPU.
-
-### Model endpoint
-
-The endpoint only needs the handler: when its repo doesn't contain the model, `handler.py` downloads [`Cloudflare/clef-flash`](https://huggingface.co/Cloudflare/clef-flash) (Apache-2.0) at startup, pinned to a tested commit (`CLEF_REVISION`). So there's no need to copy the 19 GB model.
-
-1. Put the handler in a small model repo of your own:
-   ```sh
-   hf auth login
-   hf repos create <you>/spot-a-vibe-clef --private
-   hf upload <you>/spot-a-vibe-clef endpoint/ .
-   ```
-2. On [endpoints.huggingface.co](https://endpoints.huggingface.co), create an endpoint from that repo with a GPU that has at least 24 GB of memory; one with 48 GB (e.g. L40S) leaves headroom. Use the default container (it picks up `handler.py` and installs `requirements.txt`), leave it **Protected** so only your token can call it, and set min replicas to 0 (scale-to-zero) to save money between demos. The first start takes several minutes while it downloads the weights; the Logs tab shows progress.
-3. The endpoint takes an image body (`Content-Type: image/png` or `image/jpeg`) and returns the same response as `POST /api/genre`, with both the genre and sub-genre answers. After changing `endpoint/handler.py`, upload it to the endpoint's repo again and restart the endpoint. To test it:
-   ```sh
-   curl -X POST "$CLEF_ENDPOINT_URL" -H "Authorization: Bearer $HF_TOKEN" \
-     -H "Content-Type: image/jpeg" --data-binary @photo.jpg
-   ```
-
-Billing is per minute while the endpoint is running. Before a demo, resume it (or send one request) a few minutes early, since waking from zero takes a while.
-
 ### Web server
 
 The `Dockerfile` builds the web server only, with no model dependencies, so it runs on any container host or VM without a GPU. It listens on `$PORT` (default 8000). Serve it over HTTPS at a stable URL: the camera only works in a secure context, and Spotify redirects back to a fixed address. Most hosts provide both; on a plain VM, put a reverse proxy such as Caddy or nginx in front.
