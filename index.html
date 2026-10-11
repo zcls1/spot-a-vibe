@@ -8,6 +8,11 @@
   <link rel="stylesheet" href="style.css" />
 </head>
 <body>
+  <!-- The tiled logo behind every screen, drawn by background.js as an ordered dither
+       (data-mode can also be "matrix" or "halftone"). Without WebGL, style.css's tiled
+       logo.png shows instead. -->
+  <canvas id="pageBg" class="page-bg" data-mode="dither" aria-hidden="true"></canvas>
+
   <!-- Three screens, one shown at a time (see showScreen in app.js): welcome, then
        scanning, then the vibe Clef found. Each has its own address (#scan, #vibe), so
        the browser's back button moves between them. -->
@@ -15,12 +20,12 @@
   <!-- Welcome -->
   <section id="welcome" class="screen welcome">
     <header class="header">
-      <h1>Welcome to <span class="gradient-text">Spot-a-Vibe!</span></h1>
+      <h1><span class="title-big">Welcome</span> to <span class="title-big gradient-text">Spot-a-Vibe!</span></h1>
     </header>
 
     <main class="welcome-main">
       <section class="welcome-section">
-        <h2>About</h2>
+        <h2><span class="heading-box">About</span></h2>
         <p>
           Spot-a-Vibe guesses your music taste from your style. Step in front of the camera
           and Cloudflare's Clef-Flash model looks at your outfit and accessories to pick the
@@ -31,31 +36,25 @@
       </section>
 
       <section class="welcome-section">
-        <h2>Getting Started</h2>
+        <h2><span class="heading-box">Getting Started</span></h2>
         <ol class="steps">
           <li class="step">
             <div class="step-info">
-              <h3>Step 1</h3>
+              <h3><span class="heading-box">Step 1</span></h3>
               <p>Press <strong>Start Here!</strong>, then <strong>Start camera</strong> and allow camera access. Center yourself in the frame, with only ONE person in the frame at a time.</p>
             </div>
-            <!-- Replace with a photo of this step -->
-            <div class="step-photo" aria-hidden="true">1</div>
           </li>
           <li class="step">
             <div class="step-info">
-              <h3>Step 2</h3>
+              <h3><span class="heading-box">Step 2</span></h3>
               <p>Once the camera recognizes you, it will start a countdown to take a picture of you. Press <strong>Capture</strong> to take one right away.</p>
             </div>
-            <!-- Replace with a photo of this step -->
-            <div class="step-photo" aria-hidden="true">2</div>
           </li>
           <li class="step">
             <div class="step-info">
-              <h3>Step 3</h3>
+              <h3><span class="heading-box">Step 3</span></h3>
               <p>After a few seconds, your genre, sub-genre and playlist will be revealed! Connect Spotify to get songs and save them.</p>
             </div>
-            <!-- Replace with a photo of this step -->
-            <div class="step-photo" aria-hidden="true">3</div>
           </li>
         </ol>
       </section>
@@ -70,7 +69,7 @@
   <!-- Scanning -->
   <section id="scan" class="screen" hidden>
     <header class="header">
-      <h1>Spot-a-Vibe</h1>
+      <h1><span class="gradient-text">Spot-a-Vibe</span></h1>
       <p>Center yourself in front of the camera</p>
     </header>
 
@@ -104,7 +103,7 @@
       </section>
 
       <section class="snapshots">
-        <h2>Snapshots</h2>
+        <h2><span class="heading-box">Snapshots</span></h2>
         <p id="noSnapshots" class="empty">A photo is taken 3 seconds after someone is detected, or when you press Capture, then sent to the server to guess a genre.</p>
         <div id="snapshots" class="snap-grid"></div>
       </section>
@@ -150,7 +149,7 @@
   <!-- Your vibe -->
   <section id="result" class="screen" hidden>
     <header class="header">
-      <h1>Spot-a-Vibe</h1>
+      <h1><span class="gradient-text">Spot-a-Vibe</span></h1>
     </header>
 
     <main class="result-main" aria-live="polite">
@@ -179,6 +178,7 @@
     </main>
   </section>
 
+  <script src="background.js"></script>
   <script src="app.js"></script>
 </body>
 </html>

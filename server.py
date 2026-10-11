@@ -325,7 +325,8 @@ def healthz():
 
 
 # Only the front end is served, not server.py or anything else in the repo.
-PUBLIC_FILES = {"index.html", "app.js", "style.css", "detector.worker.js", "logo.png"}
+PUBLIC_FILES = {"index.html", "app.js", "style.css", "detector.worker.js", "logo.png",
+                "logo.svg", "background.js"}
 
 
 @app.get("/")
